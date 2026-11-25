@@ -41,6 +41,20 @@ pub fn disable() -> Result<()> {
     backend().disable()
 }
 
+/// Points an existing entry to `exe args`, without turning it back on if
+/// the user turned it off in the system settings. Does nothing without an
+/// entry.
+pub fn retarget(exe: &Path, args: &[String]) -> Result<()> {
+    match status()? {
+        Autostart::Off => Ok(()),
+        Autostart::On { .. } => enable(exe, args),
+        #[cfg(windows)]
+        Autostart::DisabledBySystem { .. } => backend().set_command(exe, args),
+        #[cfg(not(windows))]
+        Autostart::DisabledBySystem { .. } => Ok(()),
+    }
+}
+
 fn failed(err: impl std::fmt::Display) -> Error {
     Error::Autostart(err.to_string())
 }
@@ -137,12 +151,17 @@ mod windows {
         }
 
         pub fn enable(&self, exe: &Path, args: &[String]) -> Result<()> {
+            self.set_command(exe, args)?;
+            // Turning it on by hand overrides an earlier "disabled" in the Task Manager.
+            self.forget_approval()
+        }
+
+        /// Writes the command, leaving the Task Manager's on/off flag alone.
+        pub fn set_command(&self, exe: &Path, args: &[String]) -> Result<()> {
             let hkcu = RegKey::predef(HKEY_CURRENT_USER);
             let (run, _) = hkcu.create_subkey(&self.run).map_err(failed)?;
             run.set_value(ENTRY_NAME, &command_line(exe, args, windows_quote))
-                .map_err(failed)?;
-            // Turning it on by hand overrides an earlier "disabled" in the Task Manager.
-            self.forget_approval()
+                .map_err(failed)
         }
 
         pub fn disable(&self) -> Result<()> {

@@ -1,6 +1,9 @@
 //! Extensions: `extension.toml` and `main.js`.
 
+use std::collections::BTreeMap;
 use std::path::Path;
+
+use serde_json::Value as Json;
 
 use super::files::read_text;
 use super::manifest::{self, ExtensionManifest};
@@ -16,6 +19,9 @@ const MAX_SCRIPT: u64 = 1024 * 1024;
 pub struct Extension {
     pub manifest: ExtensionManifest,
     pub code: String,
+    /// Setting values chosen in spacetify (`config.toml`), already checked
+    /// against the manifest. Filled by [`super::ModStore::active`].
+    pub configured: BTreeMap<String, Json>,
 }
 
 pub fn load(dir: &Path) -> Result<Extension, ModIssue> {
@@ -31,7 +37,11 @@ pub fn load(dir: &Path) -> Result<Extension, ModIssue> {
         }
     }
     let code = read_text(dir, SCRIPT, MAX_SCRIPT)?;
-    Ok(Extension { manifest, code })
+    Ok(Extension {
+        manifest,
+        code,
+        configured: BTreeMap::new(),
+    })
 }
 
 #[cfg(test)]

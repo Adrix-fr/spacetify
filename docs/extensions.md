@@ -137,8 +137,12 @@ default.
 | `onChange((name, value) => …)` | Called after `set` or `reset`; returns `stop()`       |
 | `definitions`                  | The settings as declared in the manifest              |
 
-There is no settings screen in spacetify yet: your extension shows its own
-controls if it needs them.
+The desktop app shows every declared setting in its Extensions tab (using
+`label`), and saves the chosen values in spacetify's `config.toml`, under
+`[settings.<id>]`. At the next start of Spotify after an apply, values that
+changed in the app replace the ones saved in Spotify; a setting reset in the
+app goes back to its default. Values set with `set()` from your own controls
+stay until the app changes them again, so both can live side by side.
 
 ### `spacetify.log.info / warn / error(...values)`
 

@@ -166,7 +166,51 @@ pub fn is_valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
+/// A TOML value as JSON, if it has the right type for `kind`.
+fn toml_to_json(kind: SettingKind, value: &toml::Value) -> Option<Json> {
+    match (kind, value) {
+        (SettingKind::Boolean, toml::Value::Boolean(b)) => Some(json!(b)),
+        (SettingKind::Number, toml::Value::Integer(n)) => Some(json!(n)),
+        (SettingKind::Number, toml::Value::Float(n)) if n.is_finite() => Some(json!(n)),
+        (SettingKind::String | SettingKind::Choice, toml::Value::String(s)) => Some(json!(s)),
+        _ => None,
+    }
+}
+
 impl Setting {
+    /// Whether `value` fits this setting. Same rules as the injected runtime.
+    pub fn accepts(&self, value: &Json) -> bool {
+        match self.kind {
+            SettingKind::Boolean => value.is_boolean(),
+            SettingKind::Number => value.as_f64().is_some_and(f64::is_finite),
+            SettingKind::String => value.is_string(),
+            SettingKind::Choice => value
+                .as_str()
+                .is_some_and(|s| self.choices.iter().any(|c| c == s)),
+        }
+    }
+
+    /// A value read from `config.toml`, if it fits this setting.
+    pub fn value_from_toml(&self, value: &toml::Value) -> Option<Json> {
+        toml_to_json(self.kind, value).filter(|json| self.accepts(json))
+    }
+
+    /// The same value, as written to `config.toml`.
+    pub fn value_to_toml(&self, value: &Json) -> Option<toml::Value> {
+        if !self.accepts(value) {
+            return None;
+        }
+        match value {
+            Json::Bool(b) => Some(toml::Value::Boolean(*b)),
+            Json::Number(n) => n
+                .as_i64()
+                .map(toml::Value::Integer)
+                .or_else(|| n.as_f64().map(toml::Value::Float)),
+            Json::String(s) => Some(toml::Value::String(s.clone())),
+            _ => None,
+        }
+    }
+
     /// Shape given to the injected runtime.
     pub fn to_json(&self) -> Json {
         let mut value = json!({ "type": self.kind, "default": self.default });
@@ -267,24 +311,19 @@ fn setting(name: &str, raw: RawSetting) -> Result<Setting, ModIssue> {
         setting: name.to_owned(),
     };
     let choices = raw.choices.unwrap_or_default();
-    let default = match (raw.kind, &raw.default) {
-        (SettingKind::Boolean, toml::Value::Boolean(b)) => json!(b),
-        (SettingKind::Number, toml::Value::Integer(n)) => json!(n),
-        (SettingKind::Number, toml::Value::Float(n)) if n.is_finite() => json!(n),
-        (SettingKind::String, toml::Value::String(s)) => json!(s),
-        (SettingKind::Choice, toml::Value::String(s)) => {
-            if choices.is_empty() {
-                return Err(ModIssue::ChoiceWithoutChoices {
-                    setting: name.to_owned(),
-                });
-            }
-            if !choices.contains(s) {
-                return Err(bad_default());
-            }
-            json!(s)
-        }
-        _ => return Err(bad_default()),
-    };
+    if raw.kind == SettingKind::Choice && choices.is_empty() {
+        return Err(ModIssue::ChoiceWithoutChoices {
+            setting: name.to_owned(),
+        });
+    }
+    let default = toml_to_json(raw.kind, &raw.default).ok_or_else(bad_default)?;
+    if raw.kind == SettingKind::Choice
+        && !default
+            .as_str()
+            .is_some_and(|s| choices.iter().any(|c| c == s))
+    {
+        return Err(bad_default());
+    }
     let label = match raw.label {
         Some(label) => Some(text_field("label", label, MAX_NAME_LEN)?),
         None => None,

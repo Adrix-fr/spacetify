@@ -132,6 +132,7 @@ fn meta_json(extension: &Extension) -> Json {
         "name": manifest.meta.name,
         "version": manifest.meta.version.to_string(),
         "settings": settings,
+        "configured": extension.configured,
     })
 }
 
@@ -169,6 +170,7 @@ mod tests {
         Extension {
             manifest,
             code: code.into(),
+            configured: BTreeMap::new(),
         }
     }
 

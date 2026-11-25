@@ -24,8 +24,10 @@ use std::path::{Path, PathBuf};
 
 pub use extension::Extension;
 pub use issue::{AssetProblem, ModIssue};
-pub use manifest::Meta;
+pub use manifest::{Meta, Setting, SettingKind};
 pub use theme::Theme;
+
+use serde_json::Value as Json;
 
 use crate::config::Config;
 use crate::{Error, Lang, Result};
@@ -278,6 +280,7 @@ impl ModStore {
             config.theme = None;
         }
         config.extensions.retain(|e| e != id);
+        config.settings.remove(id);
         Ok(kind)
     }
 
@@ -337,9 +340,70 @@ impl ModStore {
         let extensions = config
             .extensions
             .iter()
-            .map(|id| self.load_extension(id))
+            .map(|id| {
+                let mut extension = self.load_extension(id)?;
+                extension.configured = configured(config, &extension);
+                Ok(extension)
+            })
             .collect::<Result<_>>()?;
         Ok(ActiveMods { theme, extensions })
+    }
+
+    /// The settings of the extension `id`, with the value chosen in
+    /// spacetify, or the default. In the manifest's order.
+    pub fn settings(&self, config: &Config, id: &str) -> Result<Vec<SettingValue>> {
+        let extension = self.load_extension(id)?;
+        let chosen = configured(config, &extension);
+        Ok(extension
+            .manifest
+            .settings
+            .iter()
+            .map(|(name, setting)| SettingValue {
+                name: name.clone(),
+                value: chosen
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| setting.default.clone()),
+                custom: chosen.contains_key(name),
+                setting: setting.clone(),
+            })
+            .collect())
+    }
+
+    /// Chooses the value of a setting of the extension `id`, or goes back to
+    /// the default with `None`. Spotify takes it at the next `apply`.
+    pub fn set_setting(
+        &self,
+        config: &mut Config,
+        id: &str,
+        name: &str,
+        value: Option<&Json>,
+    ) -> Result<()> {
+        let extension = self.load_extension(id)?;
+        let invalid = || Error::InvalidSetting {
+            id: id.to_owned(),
+            setting: name.to_owned(),
+        };
+        let setting = extension.manifest.settings.get(name).ok_or_else(invalid)?;
+        match value {
+            Some(value) => {
+                let value = setting.value_to_toml(value).ok_or_else(invalid)?;
+                config
+                    .settings
+                    .entry(id.to_owned())
+                    .or_default()
+                    .insert(name.to_owned(), value);
+            }
+            None => {
+                if let Some(values) = config.settings.get_mut(id) {
+                    values.remove(name);
+                    if values.is_empty() {
+                        config.settings.remove(id);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn load(&self, kind: ModKind, id: &str) -> Result<Loaded> {
@@ -366,6 +430,31 @@ impl ModStore {
         }
         Ok(loaded)
     }
+}
+
+/// One setting of an extension and its current value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SettingValue {
+    pub name: String,
+    pub setting: Setting,
+    pub value: Json,
+    /// Chosen in spacetify, rather than the default.
+    pub custom: bool,
+}
+
+/// Values from `config.toml` that fit the extension's manifest. The others
+/// (a setting that was removed or changed type in an update) are ignored.
+fn configured(config: &Config, extension: &Extension) -> std::collections::BTreeMap<String, Json> {
+    let Some(values) = config.settings.get(&extension.manifest.meta.id) else {
+        return Default::default();
+    };
+    values
+        .iter()
+        .filter_map(|(name, value)| {
+            let setting = extension.manifest.settings.get(name)?;
+            Some((name.clone(), setting.value_from_toml(value)?))
+        })
+        .collect()
 }
 
 fn remove_dir_if_exists(dir: &Path) -> Result<()> {

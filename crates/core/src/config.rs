@@ -1,5 +1,6 @@
 //! User settings and the folders spacetify writes to.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -10,7 +11,7 @@ use crate::mods::ModStore;
 use crate::{APP_NAME, Error, Result};
 
 /// Contents of `config.toml`. Every field is optional.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// Spotify install folder, when auto-detection is not enough.
@@ -22,6 +23,10 @@ pub struct Config {
     /// Ids of the enabled extensions, in loading order.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extensions: Vec<String>,
+    /// Extension settings chosen in spacetify, by extension id then setting
+    /// name. They replace the values saved in Spotify at its next start.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub settings: BTreeMap<String, BTreeMap<String, toml::Value>>,
 }
 
 impl Config {
@@ -115,6 +120,10 @@ mod tests {
             language: Some("fr".into()),
             theme: Some("midnight".into()),
             extensions: vec!["hello-badge".into()],
+            settings: BTreeMap::from([(
+                "hello-badge".into(),
+                BTreeMap::from([("text".into(), toml::Value::String("Hi".into()))]),
+            )]),
         };
         config.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), config);

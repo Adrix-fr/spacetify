@@ -15,6 +15,7 @@ pub mod logs;
 pub mod mods;
 pub mod patcher;
 pub mod service;
+pub mod setup;
 pub mod spotify;
 
 #[cfg(test)]

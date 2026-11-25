@@ -227,8 +227,9 @@
     }
   };
 
-  const createSettings = (state, definitions) => {
+  const createSettings = (state, definitions, configured) => {
     const storageKey = `spacetify:settings:${state.id}`;
+    const configuredKey = `spacetify:configured:${state.id}`;
     const listeners = new Set();
 
     const load = () => {
@@ -249,6 +250,35 @@
     const notify = (name, value) => {
       for (const listener of listeners) listener(name, value);
     };
+
+    // Values chosen in the spacetify app win over those saved in Spotify,
+    // once: only when they changed since the last start. A value the app
+    // stopped setting goes back to the default.
+    try {
+      const chosen = configured && typeof configured === "object" ? configured : {};
+      const snapshot = JSON.stringify(chosen);
+      const previous = localStorage.getItem(configuredKey);
+      if (previous !== snapshot) {
+        let before = {};
+        try {
+          before = JSON.parse(previous || "{}") || {};
+        } catch {
+          before = {};
+        }
+        const values = load();
+        for (const name of Object.keys(definitions)) {
+          if (Object.prototype.hasOwnProperty.call(chosen, name)) {
+            values[name] = chosen[name];
+          } else if (Object.prototype.hasOwnProperty.call(before, name)) {
+            delete values[name];
+          }
+        }
+        save(values);
+        localStorage.setItem(configuredKey, snapshot);
+      }
+    } catch {
+      // Storage unavailable: the defaults and saved values still work.
+    }
 
     const get = (name) => {
       const def = definition(name);
@@ -356,7 +386,7 @@
         return removeStyle;
       },
 
-      settings: createSettings(state, meta.settings || {}),
+      settings: createSettings(state, meta.settings || {}, meta.configured || {}),
     });
   };
 

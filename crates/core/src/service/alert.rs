@@ -21,7 +21,7 @@ pub fn show_with_button(
     {
         use tauri_winrt_notification::Toast;
         const ACTION: &str = "spacetify-button";
-        let shown = Toast::new(Toast::POWERSHELL_APP_ID)
+        let shown = Toast::new(app_id())
             .title(title)
             .text1(body)
             .add_button(button, ACTION)
@@ -44,13 +44,23 @@ pub fn show_with_button(
     }
 }
 
+/// A program needs a registered id to show notifications. The installer of
+/// the desktop app registers spacetify's own. Without it (built from
+/// source), PowerShell's id is used: it exists on every Windows, so the
+/// notification still shows, under "Windows PowerShell".
+#[cfg(windows)]
+fn app_id() -> &'static str {
+    if crate::setup::app_id_registered() {
+        crate::setup::APP_ID
+    } else {
+        tauri_winrt_notification::Toast::POWERSHELL_APP_ID
+    }
+}
+
 #[cfg(windows)]
 fn show_native(title: &str, body: &str) -> Result<(), String> {
     use tauri_winrt_notification::Toast;
-    // A program needs a registered id to show notifications. Until the
-    // installer of the desktop app registers spacetify's own, PowerShell's
-    // id is used: it exists on every Windows, so the notification shows.
-    Toast::new(Toast::POWERSHELL_APP_ID)
+    Toast::new(app_id())
         .title(title)
         .text1(body)
         .show()

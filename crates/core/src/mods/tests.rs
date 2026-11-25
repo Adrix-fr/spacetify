@@ -262,3 +262,80 @@ fn refuses_a_folder_whose_name_does_not_match_the_id() {
         }
     ));
 }
+
+#[test]
+fn settings_chosen_in_spacetify_are_checked_and_injected() {
+    let mut s = setup();
+    let dir = s.sources.join("badge");
+    write_extension(&dir, "badge");
+    let mut manifest = fs::read_to_string(dir.join(extension::MANIFEST)).unwrap();
+    manifest.push_str(
+        "[settings.text]\ntype = \"string\"\ndefault = \"hi\"\n\
+         [settings.side]\ntype = \"choice\"\nchoices = [\"left\", \"right\"]\ndefault = \"right\"\n\
+         [settings.size]\ntype = \"number\"\ndefault = 12\n",
+    );
+    fs::write(dir.join(extension::MANIFEST), manifest).unwrap();
+    s.store.install(&dir).unwrap();
+    s.store.enable(&mut s.config, "badge").unwrap();
+
+    let defaults = s.store.settings(&s.config, "badge").unwrap();
+    assert_eq!(defaults.len(), 3);
+    assert!(defaults.iter().all(|v| !v.custom));
+
+    use serde_json::json;
+    s.store
+        .set_setting(&mut s.config, "badge", "side", Some(&json!("left")))
+        .unwrap();
+    s.store
+        .set_setting(&mut s.config, "badge", "size", Some(&json!(14.5)))
+        .unwrap();
+    for (name, value) in [
+        ("side", json!("top")),
+        ("text", json!(3)),
+        ("missing", json!("x")),
+    ] {
+        assert!(matches!(
+            s.store
+                .set_setting(&mut s.config, "badge", name, Some(&value)),
+            Err(Error::InvalidSetting { .. })
+        ));
+    }
+
+    let side = s
+        .store
+        .settings(&s.config, "badge")
+        .unwrap()
+        .into_iter()
+        .find(|v| v.name == "side")
+        .unwrap();
+    assert_eq!((side.value, side.custom), (json!("left"), true));
+
+    // A value that no longer fits (edited by hand, or the mod changed) is ignored.
+    s.config
+        .settings
+        .get_mut("badge")
+        .unwrap()
+        .insert("text".into(), toml::Value::Integer(1));
+    let active = s.store.active(&s.config).unwrap();
+    let configured = &active.extensions[0].configured;
+    assert_eq!(configured.len(), 2);
+    assert_eq!(configured["side"], json!("left"));
+    assert_eq!(configured["size"], json!(14.5));
+
+    s.store
+        .set_setting(&mut s.config, "badge", "side", None)
+        .unwrap();
+    s.store
+        .set_setting(&mut s.config, "badge", "size", None)
+        .unwrap();
+    s.store
+        .set_setting(&mut s.config, "badge", "text", None)
+        .unwrap();
+    assert!(s.config.settings.is_empty());
+
+    s.store
+        .set_setting(&mut s.config, "badge", "text", Some(&json!("yo")))
+        .unwrap();
+    s.store.uninstall(&mut s.config, "badge").unwrap();
+    assert!(s.config.settings.is_empty());
+}

@@ -76,6 +76,20 @@ pub enum Command {
         #[command(subcommand)]
         action: ServiceAction,
     },
+    /// Run by the Windows installer of the desktop app
+    #[command(hide = true)]
+    Installer {
+        #[command(subcommand)]
+        step: InstallerStep,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Subcommand)]
+pub enum InstallerStep {
+    /// Add spacetify to the Path, name its notifications, move the startup entry here
+    PostInstall,
+    /// Stop the service and take back what post-install did
+    PreUninstall,
 }
 
 #[derive(Debug, Subcommand)]

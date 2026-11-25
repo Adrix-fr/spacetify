@@ -13,7 +13,7 @@ use spacetify_core::service::ServicePaths;
 use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
-use crate::args::Command;
+use crate::args::{Command, InstallerStep};
 use crate::{mod_commands, service_commands, ui};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -66,7 +66,24 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Theme { id } => mod_commands::theme(ctx, &id),
         Command::Doctor => mod_commands::doctor(ctx),
         Command::Service { action } => service_commands::run(ctx, action),
+        Command::Installer { step } => installer(ctx, step),
     }
+}
+
+/// Steps run by the Windows installer, in the folder of this program.
+fn installer(ctx: &Context, step: InstallerStep) -> Result<()> {
+    let exe = std::env::current_exe().map_err(|err| Error::Setup(err.to_string()))?;
+    let dir = exe
+        .parent()
+        .ok_or_else(|| Error::Setup(exe.display().to_string()))?;
+    let steps = match step {
+        InstallerStep::PostInstall => spacetify_core::setup::after_install(dir, &ctx.service)?,
+        InstallerStep::PreUninstall => spacetify_core::setup::before_uninstall(dir, &ctx.service)?,
+    };
+    for line in steps {
+        ui::success(line);
+    }
+    Ok(())
 }
 
 pub fn status(ctx: &Context) -> Result<()> {

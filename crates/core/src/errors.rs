@@ -93,6 +93,9 @@ pub enum Error {
     #[error("`{0}` is an extension, not a theme.")]
     NotATheme(String),
 
+    #[error("`{setting}` is not a valid setting of `{id}`, or the value does not fit it.")]
+    InvalidSetting { id: String, setting: String },
+
     #[error("The id `{id}` is already used by an installed {}. Ids must be unique.", .kind.label(Lang::En))]
     IdTaken { id: String, kind: ModKind },
 
@@ -131,6 +134,9 @@ pub enum Error {
 
     #[error("Could not change the start with the computer: {0}")]
     Autostart(String),
+
+    #[error("Could not set up spacetify for this user: {0}")]
+    Setup(String),
 
     #[error("File error on {}: {source}", .path.display())]
     Io {
@@ -179,6 +185,7 @@ impl Error {
             Self::InvalidMod { what, issue } => format!("{what} est refusé : {}", issue.localized(Lang::Fr)),
             Self::ModNotFound(id) => format!("Aucun thème ni extension nommé `{id}` n'est installé. `spacetify list` montre ce qui est installé."),
             Self::NotATheme(id) => format!("`{id}` est une extension, pas un thème."),
+            Self::InvalidSetting { id, setting } => format!("`{setting}` n'est pas un réglage valide de `{id}`, ou la valeur ne lui convient pas."),
             Self::IdTaken { id, kind } => format!("L'identifiant `{id}` est déjà pris par un(e) {} installé(e). Chaque identifiant doit être unique.", kind.label(Lang::Fr)),
             Self::InstallFromStore(path) => format!("{} est déjà dans le dossier des mods de spacetify. Installe plutôt depuis ta propre copie du mod.", path.display()),
             Self::Incompatible(count) => format!("{count} problème(s) trouvé(s) avec tes mods pour cette version de Spotify. Le détail est au-dessus."),
@@ -190,6 +197,7 @@ impl Error {
             Self::ServiceFailed(log) => format!("Le service en arrière-plan s'est arrêté aussitôt. Son journal dit peut-être pourquoi : {}", log.display()),
             Self::ServiceStop => "Le service en arrière-plan ne s'est pas arrêté. Ferme `spacetify-service` dans le Gestionnaire des tâches.".into(),
             Self::Autostart(reason) => format!("Impossible de modifier le démarrage avec l'ordinateur : {reason}"),
+            Self::Setup(reason) => format!("Impossible de préparer spacetify pour cet utilisateur : {reason}"),
             Self::Io { path, source } => format!("Erreur de fichier sur {} : {source}", path.display()),
         }
     }
