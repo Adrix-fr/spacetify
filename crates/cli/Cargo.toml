@@ -1,0 +1,21 @@
+[package]
+name = "spacetify-cli"
+description = "Command-line interface of spacetify."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "spacetify"
+path = "src/main.rs"
+
+[dependencies]
+spacetify-core.workspace = true
+clap.workspace = true
+crossterm.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

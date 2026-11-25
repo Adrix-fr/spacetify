@@ -1,0 +1,24 @@
+//! Core of spacetify.
+//!
+//! Everything that touches Spotify lives here: finding the install, backing up
+//! its interface, detecting changes made by other tools and injecting mods.
+//! The CLI is a thin layer on top, and so will be the desktop app and the
+//! background service.
+
+pub mod backup;
+pub mod config;
+pub mod detect;
+pub mod errors;
+pub mod i18n;
+pub mod logs;
+pub mod patcher;
+pub mod spotify;
+
+#[cfg(test)]
+mod testing;
+
+pub use errors::{Error, Result};
+pub use i18n::Lang;
+
+/// Used for folder names, archive paths and injected element ids.
+pub const APP_NAME: &str = "spacetify";

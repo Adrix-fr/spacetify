@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Adrix-fr/spacetify"
+description = "A reliable mod manager for the Spotify desktop client."
+
+[workspace.dependencies]
+spacetify-core = { path = "crates/core" }
+clap = { version = "4.6", features = ["derive"] }
+crossterm = "0.29"
+dirs = "7"
+humantime = "2.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+sys-locale = "0.3"
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+tempfile = "3"
+thiserror = "2"
+toml = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
