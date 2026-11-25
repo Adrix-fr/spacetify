@@ -2,9 +2,9 @@
 
 A mod manager for the Spotify desktop client, built to survive Spotify updates.
 
-> **Status: early development (phase 2).** The core, the CLI, themes and
-> extensions work on Windows. The desktop app and automatic repair after
-> updates are not there yet. macOS and Linux are supported in the code but
+> **Status: early development (phase 3).** The core, the CLI, themes,
+> extensions and automatic repair after updates work on Windows. The desktop
+> app is not there yet. macOS and Linux are supported in the code but
 > untested.
 
 ## Why
@@ -30,6 +30,8 @@ spacetify takes a different approach:
   warns before something breaks.
 - **One broken mod never breaks Spotify.** Each extension runs on its own,
   and mods are validated before anything is injected.
+- **Repairs itself after updates.** An optional background service notices
+  when a Spotify update removes the mods and puts them back.
 
 ## Install
 
@@ -40,7 +42,11 @@ There are no releases yet. Build from source with Rust 1.95 or newer
 git clone https://github.com/Adrix-fr/spacetify
 cd spacetify
 cargo install --path crates/cli
+cargo install --path crates/service   # for automatic repair
 ```
+
+The two programs must sit in the same folder (`cargo install` puts both in
+`~/.cargo/bin`).
 
 ## Usage
 
@@ -62,6 +68,7 @@ Run `spacetify` on its own to open the interactive menu (arrow keys, Enter,
 | `spacetify disable ID`    | Turn an extension or the active theme off          |
 | `spacetify theme ID`      | Choose the active theme (`none` for Spotify's own) |
 | `spacetify doctor`        | Check the active mods against the installed Spotify |
+| `spacetify service …`     | Automatic repair after updates, see below          |
 
 Useful options: `--yes` closes Spotify without asking, `--lang en|fr` picks the
 language, `--spotify-path DIR` points to a custom install, `-v` shows logs.
@@ -87,6 +94,51 @@ Making your own: see [docs/themes.md](docs/themes.md) and
 not work as they are, because they rely on changes Spicetify makes to
 Spotify's code; the guides explain what can be carried over.
 
+### Automatic repair after Spotify updates
+
+A Spotify update replaces its interface file, which removes the mods. The
+background service puts them back by itself:
+
+| Command                                   | What it does                                          |
+| ----------------------------------------- | ----------------------------------------------------- |
+| `spacetify service enable`                | Start the service now and at every login              |
+| `spacetify service disable`               | Stop it and remove it from startup (uninstall)        |
+| `spacetify service start` / `stop`        | Same, for now only                                    |
+| `spacetify service status`                | Whether it runs and what it is doing                  |
+| `spacetify service events`                | What it did lately (`-n 50` for more)                 |
+| `spacetify service simulate-update`       | Do what an update does, to test the repair            |
+
+The same actions are in the menu, under *Automatic repair*.
+
+How it works:
+
+- It sleeps until the system reports a change in Spotify's `Apps` folder,
+  with a safety check every 10 minutes. Idle, it uses about 2-3 MB of memory
+  and no processor time.
+- It never writes while Spotify or its updater runs, nor while the file is
+  still changing. Spotify usually reopens by itself after an update, so a
+  notification offers a *Restart Spotify* button: it closes Spotify, puts the
+  mods back and opens it again in a few seconds. Without a click, nothing is
+  cut: the mods come back the next time you close Spotify, even briefly.
+- It first backs up the new interface and checks it by hash, so `restore`
+  always gives back the version you have, never an older one.
+- It runs `doctor` on the new version and turns off mods that no longer fit
+  (`spacetify enable ID` turns one back on), and says so.
+- It only uses the file method. It never starts Spotify with `--live`'s
+  debugging port, never downloads anything and never needs admin rights.
+- After `spacetify restore`, it leaves Spotify alone until the next `apply`.
+- Notifications currently show under "Windows PowerShell": a program needs a
+  registered name to show its own, which the desktop app's installer will do.
+
+Only one service runs at a time. It talks to the CLI (and later the desktop
+app) through files in its folder, not through the network.
+
+To test it: apply your mods, run `spacetify service enable`, then
+`spacetify service simulate-update`. It puts Spotify's original interface
+back exactly as an update does (Spotify is restarted if it was open). Press
+*Restart Spotify* in the notification, or close Spotify, and the mods are
+back a few seconds later. `spacetify service events` shows each step.
+
 ### Safety rules
 
 - Nothing is modified while Spotify is running. You are offered to close it.
@@ -110,9 +162,25 @@ control it. Use it if you understand that trade-off.
 | Backups | `%LOCALAPPDATA%\spacetify` | `~/Library/Application Support/spacetify` | `~/.local/share/spacetify` |
 
 Mods go in the `themes` and `extensions` folders, and `config.toml` remembers
-which ones are on.
+which ones are on. The service keeps its status, events and log in
+`service` next to the backups.
 
 Set `SPACETIFY_HOME` to keep everything in a single folder instead.
+
+What `spacetify service enable` adds to the system, and nothing else:
+
+| System  | Entry                                                                       |
+| ------- | --------------------------------------------------------------------------- |
+| Windows | value `spacetify` in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| macOS   | `~/Library/LaunchAgents/io.github.adrix-fr.spacetify.plist`                 |
+| Linux   | `~/.config/autostart/spacetify-service.desktop`                             |
+
+On Windows it shows as *spacetify* in Task Manager > Startup apps, where it
+can also be turned off. `spacetify service disable` removes the entry (and
+the Task Manager's on/off flag for it).
+
+To remove spacetify completely: `spacetify restore`, then
+`spacetify service disable`, then delete the folders above and the programs.
 
 ## Project layout
 
@@ -126,9 +194,12 @@ crates/
                       and the injected payload (payload.rs)
     src/mods/         themes and extensions: manifests, checks, install
     src/doctor.rs     compatibility checks against the installed Spotify
+    src/service/      automatic repair: main loop, autostart, events, notifications
     src/config.rs     config.toml and app folders
     assets/runtime.js the code injected into Spotify that runs extensions
   cli/       the `spacetify` binary: menu and commands
+  service/   the `spacetify-service` binary, which runs in the background
+build/       Windows version information shared by both programs
 apps/
   desktop/   future Tauri app (not started)
 docs/        guides for theme and extension authors
@@ -151,13 +222,36 @@ Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Roadmap
 
 1. ~~Core, CLI, backup/restore, proof of injection~~
-2. Themes and extensions that rely on stable selectors and CSS variables
-   (in progress)
+2. ~~Themes and extensions that rely on stable selectors and CSS variables~~
 3. Background service that re-applies mods after a Spotify update
+   (in progress)
 4. Desktop app (Tauri) with an installer
+
+## Releases and antivirus software
+
+There are no releases yet. New, unsigned programs that start with Windows and
+change another app's files are sometimes flagged by mistake by antivirus
+software. To keep that rare, spacetify:
+
+- has clear names (`spacetify.exe`, `spacetify-service.exe`) and Windows
+  version information (product, publisher, description, version);
+- is never packed or compressed (no UPX);
+- starts with Windows only through the standard per-user `Run` entry, visible
+  in the Task Manager, and never copies itself anywhere;
+- never asks for admin rights, never downloads code, and never touches any
+  program other than Spotify.
+
+Planned for releases: programs built by GitHub Actions and signed through the
+[SignPath Foundation](https://signpath.org) (free signing for open-source
+projects), with the SHA-256 of every file published next to it.
+
+If Microsoft Defender flags spacetify, you can report a false positive at
+<https://www.microsoft.com/wdsi/filesubmission>.
 
 ## License
 
 [GPL-3.0-or-later](LICENSE).
 
-spacetify is not affiliated with or endorsed by Spotify AB.
+spacetify is not affiliated with or endorsed by Spotify AB. Modifying the
+Spotify client may go against its terms of use: use it at your own risk.
+spacetify does not and will never block ads or unlock Premium features.

@@ -25,11 +25,29 @@ cargo test --workspace
 
 ## Guidelines
 
-- **Logic belongs in `crates/core`.** The CLI, and later the desktop app and
-  the service, only display things and ask questions.
+- **Logic belongs in `crates/core`.** The CLI, the service and later the
+  desktop app only display things and ask questions.
+- **No ad blocking, no Premium unlocking.** spacetify changes how Spotify
+  looks and adds small features. Mods or changes that block ads or unlock
+  paid features will not be accepted: they get users' accounts banned.
+- **Nothing that looks like malware.** No hidden or disguised processes, no
+  copies of the program in system folders, no admin rights, no code
+  downloaded from the internet, no executable packers (UPX or others), and
+  no registry or system change beyond the documented startup entry. The
+  service only uses the file method, never `--live`.
 - **Tests never touch a real Spotify install.** Use the fixtures in
   `crates/core/src/testing.rs`, which build fake `xpui.spa` archives in a
-  temporary folder.
+  temporary folder. The service's logic is tested with a fake clock and a
+  fake process list (`crates/core/src/service/daemon/tests.rs`). The only
+  test that writes to the registry uses a throwaway key under
+  `HKCU\Software\spacetify-tests` and deletes it.
+- **Trying the service by hand without touching your Spotify.** Set
+  `SPACETIFY_HOME` to an empty folder, copy an `xpui.spa` into a fake
+  `Spotify/Apps` folder, set `spotify_path` in that folder's `config.toml`,
+  then use `spacetify apply`, `spacetify service start` and
+  `spacetify service simulate-update`. Stop the service
+  (`spacetify service stop`) before rebuilding: Windows locks a running
+  program's file.
 - **Keep the patch minimal.** Do not rewrite Spotify's own code; it is what
   breaks other tools after every update.
 - **Mods are untrusted input.** Everything a theme or extension provides is
