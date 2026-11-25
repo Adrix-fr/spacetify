@@ -3,6 +3,7 @@
   import { Settings2 } from "@lucide/svelte";
   import { api, events } from "./lib/api";
   import Logo from "./lib/Logo.svelte";
+  import WindowControls from "./lib/WindowControls.svelte";
   import Overlays from "./lib/Overlays.svelte";
   import { app, refreshOverview, runAction, tr, type Page } from "./lib/state.svelte";
   import Home from "./pages/Home.svelte";
@@ -23,6 +24,8 @@
   ];
 
   let ready = $state(false);
+  // On Windows the system title bar is hidden: the header takes its place.
+  const ownTitleBar = navigator.userAgent.includes("Windows");
 
   onMount(() => {
     // Focus rings only for keyboard users: on with Tab, off with the mouse.
@@ -67,8 +70,8 @@
 </script>
 
 <div class="shell">
-  <header>
-    <div class="brand">
+  <header data-tauri-drag-region class:own-title-bar={ownTitleBar}>
+    <div class="brand" data-tauri-drag-region>
       <Logo size={22} />
       <span>spacetify</span>
     </div>
@@ -82,6 +85,7 @@
         >
       {/each}
     </nav>
+    <div class="drag" data-tauri-drag-region></div>
     <button
       class="tab icon"
       class:active={app.page === "settings"}
@@ -91,6 +95,9 @@
     >
       <Settings2 size={16} strokeWidth={1.5} />
     </button>
+    {#if ownTitleBar}
+      <WindowControls />
+    {/if}
   </header>
 
   <main class="scroll">
@@ -134,8 +141,22 @@
     padding: 0 20px;
     border-bottom: 1px solid var(--line);
     flex: none;
+    user-select: none;
+  }
+  header.own-title-bar {
+    padding-right: 8px;
+  }
+  .drag {
+    flex: 1;
+    align-self: stretch;
+    min-width: 16px;
+  }
+  /* Drags start on the brand too. */
+  .brand :global(*) {
+    pointer-events: none;
   }
   .brand {
+    flex: none;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -176,7 +197,6 @@
     box-shadow: 0 0 0 2px rgba(255, 107, 129, 0.45);
   }
   .tab.icon {
-    margin-left: auto;
     width: 32px;
     padding: 0;
     display: flex;

@@ -1,7 +1,7 @@
 // Development only: lets `npm run dev` show the window in a normal browser,
 // with sample data instead of the Rust side. Never part of the built app
 // (see `main.ts`). Handy to work on the look without touching Spotify.
-import { mockIPC } from "@tauri-apps/api/mocks";
+import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 
 const midnight = {
   frame: "#07070f",
@@ -46,6 +46,7 @@ const events = [
 let extOn = true;
 
 export function installMock() {
+  mockWindows("main");
   mockIPC(async (cmd, args) => {
     await new Promise((r) => setTimeout(r, 150));
     switch (cmd) {
