@@ -2,10 +2,10 @@
 
 A mod manager for the Spotify desktop client, built to survive Spotify updates.
 
-> **Status: early development (phase 3).** The core, the CLI, themes,
-> extensions and automatic repair after updates work on Windows. The desktop
-> app is not there yet. macOS and Linux are supported in the code but
-> untested.
+> **Status: early development (phase 4).** The core, the CLI, themes,
+> extensions, automatic repair after updates and the desktop app with its
+> Windows installer work on Windows. macOS and Linux are supported in the
+> code but untested.
 
 ## Why
 
@@ -35,8 +35,22 @@ spacetify takes a different approach:
 
 ## Install
 
-There are no releases yet. Build from source with Rust 1.95 or newer
-(get it with [rustup](https://rustup.rs)):
+### Windows installer
+
+There are no releases yet. The CI builds the installer on every push: open
+the latest run of the *CI* workflow on GitHub and download the
+`spacetify-windows` artifact (it holds `SHA256SUMS.txt` too). Or build it
+yourself, see [apps/desktop/README.md](apps/desktop/README.md).
+
+It installs for your user only, without admin rights: the app, the
+`spacetify` command (added to your `Path`, so it works in any new terminal)
+and the background service. The app sits in the notification area; closing
+its window does not stop the automatic repair. Uninstall it from *Settings >
+Apps*: it offers to put Spotify back first, and keeps your mods and backups.
+
+### From source
+
+Build with Rust 1.95 or newer (get it with [rustup](https://rustup.rs)):
 
 ```sh
 git clone https://github.com/Adrix-fr/spacetify
@@ -46,9 +60,15 @@ cargo install --path crates/service   # for automatic repair
 ```
 
 The two programs must sit in the same folder (`cargo install` puts both in
-`~/.cargo/bin`).
+`~/.cargo/bin`). The desktop app is built with Node.js too, see
+[apps/desktop/README.md](apps/desktop/README.md).
 
 ## Usage
+
+The desktop app has a tab for each part: Home (state of Spotify, Apply and
+Restore), Themes, Extensions (with their settings), Compatibility, Automatic
+repair, a Terminal that runs the commands below, and Settings. Everything is
+also available from a terminal.
 
 Run `spacetify` on its own to open the interactive menu (arrow keys, Enter,
 `q` to quit). Every action is also available as a command:
@@ -127,8 +147,10 @@ How it works:
 - It only uses the file method. It never starts Spotify with `--live`'s
   debugging port, never downloads anything and never needs admin rights.
 - After `spacetify restore`, it leaves Spotify alone until the next `apply`.
-- Notifications currently show under "Windows PowerShell": a program needs a
-  registered name to show its own, which the desktop app's installer will do.
+- Notifications show as "spacetify" once the desktop app's installer has
+  registered that name. Without it (built from source), they show under
+  "Windows PowerShell", since a program needs a registered name to show
+  its own.
 
 Only one service runs at a time. It talks to the CLI (and later the desktop
 app) through files in its folder, not through the network.
@@ -179,8 +201,14 @@ On Windows it shows as *spacetify* in Task Manager > Startup apps, where it
 can also be turned off. `spacetify service disable` removes the entry (and
 the Task Manager's on/off flag for it).
 
-To remove spacetify completely: `spacetify restore`, then
-`spacetify service disable`, then delete the folders above and the programs.
+The Windows installer also adds, for the current user only: its folder in
+the user `Path` (`HKCU\Environment`), the name of its notifications
+(`HKCU\Software\Classes\AppUserModelId\io.github.adrix-fr.spacetify`), and
+the usual Start menu entry and uninstall information. Uninstalling removes
+them all.
+
+To remove spacetify completely: uninstall the app (or run `spacetify restore`,
+then `spacetify service disable`), then delete the folders above.
 
 ## Project layout
 
@@ -195,20 +223,25 @@ crates/
     src/mods/         themes and extensions: manifests, checks, install
     src/doctor.rs     compatibility checks against the installed Spotify
     src/service/      automatic repair: main loop, autostart, events, notifications
+    src/setup.rs      what the Windows installer sets up (Path, notification name)
     src/config.rs     config.toml and app folders
     assets/runtime.js the code injected into Spotify that runs extensions
   cli/       the `spacetify` binary: menu and commands
   service/   the `spacetify-service` binary, which runs in the background
 build/       Windows version information shared by both programs
 apps/
-  desktop/   future Tauri app (not started)
+  desktop/   the desktop app (Tauri + Svelte) and its Windows installer
 docs/        guides for theme and extension authors
 examples/    an example theme and an example extension
 ```
 
 ## Development
 
+The desktop app's Rust code embeds its web files, so build them once first
+(Node.js 20 or newer):
+
 ```sh
+cd apps/desktop && npm ci && npm run build && cd ../..
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -223,9 +256,8 @@ Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 1. ~~Core, CLI, backup/restore, proof of injection~~
 2. ~~Themes and extensions that rely on stable selectors and CSS variables~~
-3. Background service that re-applies mods after a Spotify update
-   (in progress)
-4. Desktop app (Tauri) with an installer
+3. ~~Background service that re-applies mods after a Spotify update~~
+4. Desktop app (Tauri) with an installer (in progress)
 
 ## Releases and antivirus software
 
@@ -239,11 +271,13 @@ software. To keep that rare, spacetify:
 - starts with Windows only through the standard per-user `Run` entry, visible
   in the Task Manager, and never copies itself anywhere;
 - never asks for admin rights, never downloads code, and never touches any
-  program other than Spotify.
+  program other than Spotify;
+- installs with a standard Tauri (NSIS) installer, for the current user only.
 
 Planned for releases: programs built by GitHub Actions and signed through the
 [SignPath Foundation](https://signpath.org) (free signing for open-source
-projects), with the SHA-256 of every file published next to it.
+projects), with the SHA-256 of every file published next to it. The CI is
+ready for it and already publishes `SHA256SUMS.txt` with the installer.
 
 If Microsoft Defender flags spacetify, you can report a false positive at
 <https://www.microsoft.com/wdsi/filesubmission>.
@@ -254,4 +288,3 @@ If Microsoft Defender flags spacetify, you can report a false positive at
 
 spacetify is not affiliated with or endorsed by Spotify AB. Modifying the
 Spotify client may go against its terms of use: use it at your own risk.
-spacetify does not and will never block ads or unlock Premium features.

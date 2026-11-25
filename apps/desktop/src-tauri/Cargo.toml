@@ -1,0 +1,31 @@
+[package]
+name = "spacetify-desktop"
+description = "Desktop app of spacetify."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "spacetify-app"
+path = "src/main.rs"
+
+[dependencies]
+spacetify-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-single-instance.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[lints]
+workspace = true

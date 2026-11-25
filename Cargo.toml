@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli", "crates/service"]
+members = ["crates/core", "crates/cli", "crates/service", "apps/desktop/src-tauri"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0-or-later"
@@ -24,6 +24,11 @@ serde_json = "1"
 sha2 = "0.11"
 sys-locale = "0.3"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-build = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 tauri-winrt-notification = "0.8"
 tempfile = "3"
 thiserror = "2"

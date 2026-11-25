@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration ("windows"), to paste into the SignPath
+  project once the SignPath Foundation has accepted spacetify. The CI uploads
+  a zip with the installer and the three programs; every .exe in it gets an
+  Authenticode signature. See apps/desktop/README.md, "Signing".
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="*.exe" max-matches="unbounded">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

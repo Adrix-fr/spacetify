@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <!-- spacetify logo ("Planète"), on a transparent background. -->
+  <defs>
+    <linearGradient id="g" x1="10" y1="4" x2="54" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFA273"/>
+      <stop offset="0.5" stop-color="#FF6B81"/>
+      <stop offset="1" stop-color="#E5487F"/>
+    </linearGradient>
+    <clipPath id="planet"><circle cx="32" cy="33" r="19"/></clipPath>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-linecap="round">
+        <path d="M20 27.5C27 24.5 37 25 45 29" stroke-width="4"/>
+        <path d="M21.5 33.5C28 31 36 31.5 42.5 34.5" stroke-width="3.4"/>
+        <path d="M23.5 39.3C29 37.5 34.5 38 38.5 39.6" stroke-width="2.8"/>
+        <g transform="rotate(-15 32 33)" clip-path="url(#planet)">
+          <path d="M2 33A30 9 0 0 0 62 33" stroke-width="6.5" stroke-linecap="butt"/>
+        </g>
+      </g>
+    </mask>
+  </defs>
+  <g fill="none">
+    <g mask="url(#cut)">
+      <g transform="rotate(-15 32 33)"><ellipse cx="32" cy="33" rx="30" ry="9" stroke="url(#g)" stroke-width="3.5"/></g>
+      <circle cx="32" cy="33" r="19" fill="url(#g)"/>
+    </g>
+    <g transform="rotate(-15 32 33)"><path d="M2 33A30 9 0 0 0 62 33" stroke="url(#g)" stroke-width="3.5"/></g>
+  </g>
+</svg>

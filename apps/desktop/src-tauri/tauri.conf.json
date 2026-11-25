@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "spacetify",
+  "mainBinaryName": "spacetify-app",
+  "identifier": "io.github.adrix-fr.spacetify",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "spacetify",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 620,
+        "center": true,
+        "theme": "Dark",
+        "backgroundColor": "#0A0A0B"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Adrix-fr (spacetify project)",
+    "copyright": "GPL-3.0-or-later",
+    "license": "GPL-3.0-or-later",
+    "homepage": "https://github.com/Adrix-fr/spacetify",
+    "category": "Utility",
+    "shortDescription": "A reliable mod manager for the Spotify desktop client.",
+    "longDescription": "spacetify applies themes and extensions to the Spotify desktop client and puts them back after Spotify updates.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../../examples/": "examples/",
+      "icons/notification.png": "icon.png"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "./windows/hooks.nsh",
+        "installerIcon": "icons/icon.ico",
+        "languages": ["English", "French"],
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

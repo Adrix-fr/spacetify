@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <!-- Tray icon: the logo with thicker strokes and two waves, readable at 16 px. -->
+  <defs>
+    <linearGradient id="g" x1="10" y1="4" x2="54" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFA273"/>
+      <stop offset="0.5" stop-color="#FF6B81"/>
+      <stop offset="1" stop-color="#E5487F"/>
+    </linearGradient>
+    <clipPath id="planet"><circle cx="32" cy="33" r="20"/></clipPath>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-linecap="round">
+        <path d="M20 28C27 25 37 25.5 45 29.5" stroke-width="5.5"/>
+        <path d="M22 35.5C28 33 36 33.5 42 36.5" stroke-width="5"/>
+        <g transform="rotate(-15 32 33)" clip-path="url(#planet)">
+          <path d="M2 33A30 9 0 0 0 62 33" stroke-width="8" stroke-linecap="butt"/>
+        </g>
+      </g>
+    </mask>
+  </defs>
+  <g fill="none">
+    <g mask="url(#cut)">
+      <g transform="rotate(-15 32 33)"><ellipse cx="32" cy="33" rx="30" ry="9" stroke="url(#g)" stroke-width="5.5"/></g>
+      <circle cx="32" cy="33" r="20" fill="url(#g)"/>
+    </g>
+    <g transform="rotate(-15 32 33)"><path d="M2 33A30 9 0 0 0 62 33" stroke="url(#g)" stroke-width="5.5"/></g>
+  </g>
+</svg>
