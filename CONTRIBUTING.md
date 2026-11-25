@@ -37,9 +37,10 @@ cd apps/desktop && npm run check
   copies of the program in system folders, no admin rights, no code
   downloaded from the internet, no executable packers (UPX or others), and
   no registry or system change beyond the documented startup entry and what
-  the installer documents (user `Path`, notification name). The installer is
-  Tauri's standard NSIS one, per user; its extra steps live in
-  `crates/core/src/setup.rs`, not in installer scripts. The
+  the installer documents (user `Path`, notification name). The installer
+  (`apps/setup`) is per user; it only copies files, makes the shortcuts and
+  the uninstall entry, and its other steps live in
+  `crates/core/src/setup.rs`. The
   service only uses the file method, never `--live`.
 - **Tests never touch a real Spotify install.** Use the fixtures in
   `crates/core/src/testing.rs`, which build fake `xpui.spa` archives in a

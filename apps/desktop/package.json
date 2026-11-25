@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "dev:setup": "vite --config vite.setup.config.ts",
+    "build:setup": "vite build --config vite.setup.config.ts",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "tauri": "tauri",
     "sidecars": "node scripts/sidecars.mjs",
-    "bundle": "node scripts/sidecars.mjs && tauri build --config src-tauri/tauri.bundle.conf.json"
+    "bundle": "node scripts/bundle.mjs"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "5.3.0",

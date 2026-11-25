@@ -8,14 +8,17 @@
 //! - the startup entry of the service, moved to the installed copy when it
 //!   pointed somewhere else (an older build, `target\release`…).
 //!
-//! The installer runs `spacetify installer post-install` and
-//! `spacetify installer pre-uninstall`, which call [`after_install`] and
-//! [`before_uninstall`]. On other systems they do nothing.
+//! The installer (`apps/setup`) runs each step on its own, so it can show
+//! which one failed and run it again: [`add_to_path`],
+//! [`register_notifications`] and [`setup_autostart`]. [`after_install`]
+//! runs all three, for `spacetify installer post-install`; on uninstall,
+//! [`before_uninstall`] takes everything back. On other systems they do
+//! nothing.
 
 use std::path::Path;
 
 use crate::service::{self, ServicePaths};
-use crate::{Result, tr};
+use crate::{Lang, Result, tr};
 
 /// Identifier of the desktop app, also used as the notification name on
 /// Windows and the LaunchAgent label on macOS.
@@ -29,7 +32,45 @@ pub type Steps = Vec<String>;
 
 /// Sets everything up for the copy installed in `dir`.
 pub fn after_install(dir: &Path, paths: &ServicePaths) -> Result<Steps> {
-    platform::after_install(dir, paths)
+    let lang = Lang::detect();
+    let mut steps = Steps::new();
+    if add_to_path(dir)? {
+        steps.push(tr!(
+            lang,
+            "Added {} to the user Path.",
+            "{} ajouté au Path de l'utilisateur.",
+            dir.display()
+        ));
+    }
+    if register_notifications(dir)? {
+        steps.push(tr!(
+            lang,
+            "Notifications will show as \"spacetify\".",
+            "Les notifications s'afficheront au nom de « spacetify »."
+        ));
+    }
+    steps.extend(setup_autostart(dir, paths)?);
+    Ok(steps)
+}
+
+/// Adds `dir` to the user `Path`, so `spacetify` works in any new terminal.
+/// Returns whether the `Path` changed. Terminals opened from the Start menu
+/// only see it once Windows is told (the installer does that).
+pub fn add_to_path(dir: &Path) -> Result<bool> {
+    platform::add_to_path(dir)
+}
+
+/// Gives notifications spacetify's own name and icon (`icon.png` in `dir`).
+/// Returns whether that is done (never on other systems).
+pub fn register_notifications(dir: &Path) -> Result<bool> {
+    platform::register_notifications(dir)
+}
+
+/// Points the startup entry of the service to the copy in `dir`, turns it
+/// back on after a quick reinstall, and starts the new service when the
+/// automatic repair is on.
+pub fn setup_autostart(dir: &Path, paths: &ServicePaths) -> Result<Steps> {
+    platform::setup_autostart(dir, paths)
 }
 
 /// Takes back what [`after_install`] did, and stops the service, so the
@@ -152,26 +193,19 @@ mod platform {
         Error::Setup(err.to_string())
     }
 
-    pub fn after_install(dir: &Path, paths: &ServicePaths) -> Result<Steps> {
+    pub fn add_to_path(dir: &Path) -> Result<bool> {
+        Keys::user().add_to_path(dir)
+    }
+
+    pub fn register_notifications(dir: &Path) -> Result<bool> {
+        Keys::user()
+            .register_app_id(&dir.join("icon.png"))
+            .map(|()| true)
+    }
+
+    pub fn setup_autostart(dir: &Path, paths: &ServicePaths) -> Result<Steps> {
         let lang = Lang::detect();
         let mut steps = Steps::new();
-        let keys = Keys::user();
-
-        if keys.add_to_path(dir)? {
-            steps.push(tr!(
-                lang,
-                "Added {} to the user Path.",
-                "{} ajouté au Path de l'utilisateur.",
-                dir.display()
-            ));
-        }
-        keys.register_app_id(&dir.join("icon.png"))?;
-        steps.push(tr!(
-            lang,
-            "Notifications will show as \"spacetify\".",
-            "Les notifications s'afficheront au nom de « spacetify »."
-        ));
-
         let exe = dir.join(service::EXECUTABLE);
         if super::take_reinstall_note(paths) && matches!(autostart::status()?, Autostart::Off) {
             // The installer removed the older copy first (which also removes
@@ -421,7 +455,15 @@ mod platform {
     use crate::Result;
     use crate::service::ServicePaths;
 
-    pub fn after_install(_dir: &Path, _paths: &ServicePaths) -> Result<Steps> {
+    pub fn add_to_path(_dir: &Path) -> Result<bool> {
+        Ok(false)
+    }
+
+    pub fn register_notifications(_dir: &Path) -> Result<bool> {
+        Ok(false)
+    }
+
+    pub fn setup_autostart(_dir: &Path, _paths: &ServicePaths) -> Result<Steps> {
         Ok(Steps::new())
     }
 

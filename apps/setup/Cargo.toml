@@ -1,0 +1,44 @@
+[package]
+name = "spacetify-setup"
+description = "Windows installer and uninstaller of spacetify."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "spacetify-setup"
+path = "src/main.rs"
+
+# Windows only: on other systems the program is an empty stub, so the
+# workspace still builds there without a web view.
+[target.'cfg(windows)'.dependencies]
+spacetify-core.workspace = true
+dirs.workspace = true
+mslnk = "0.1"
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+# The web files are always embedded: this program has no dev server mode.
+tauri = { version = "2", features = ["custom-protocol"] }
+tauri-plugin-opener.workspace = true
+tracing.workspace = true
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+winreg.workspace = true
+zip.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+tempfile.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+zip.workspace = true
+
+# Like the rest of the workspace, except for one call that tells Windows the
+# user `Path` changed (see `src/environment.rs`): `deny` lets that single
+# function opt in, `forbid` would not.
+[lints.rust]
+unsafe_code = "deny"

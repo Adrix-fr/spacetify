@@ -204,8 +204,9 @@ the Task Manager's on/off flag for it).
 The Windows installer also adds, for the current user only: its folder in
 the user `Path` (`HKCU\Environment`), the name of its notifications
 (`HKCU\Software\Classes\AppUserModelId\io.github.adrix-fr.spacetify`), and
-the usual Start menu entry and uninstall information. Uninstalling removes
-them all.
+the usual Start menu and desktop shortcuts and uninstall information
+(`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\spacetify`).
+Uninstalling removes them all.
 
 To remove spacetify completely: uninstall the app (or run `spacetify restore`,
 then `spacetify service disable`), then delete the folders above.
@@ -230,18 +231,19 @@ crates/
   service/   the `spacetify-service` binary, which runs in the background
 build/       Windows version information shared by both programs
 apps/
-  desktop/   the desktop app (Tauri + Svelte) and its Windows installer
+  desktop/   the desktop app (Tauri + Svelte), and the installer's window
+  setup/     the Windows installer and uninstaller (Rust side)
 docs/        guides for theme and extension authors
 examples/    an example theme and an example extension
 ```
 
 ## Development
 
-The desktop app's Rust code embeds its web files, so build them once first
-(Node.js 20 or newer):
+The desktop app's and the installer's Rust code embed their web files, so
+build them once first (Node.js 20 or newer):
 
 ```sh
-cd apps/desktop && npm ci && npm run build && cd ../..
+cd apps/desktop && npm ci && npm run build && npm run build:setup && cd ../..
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -272,7 +274,10 @@ software. To keep that rare, spacetify:
   in the Task Manager, and never copies itself anywhere;
 - never asks for admin rights, never downloads code, and never touches any
   program other than Spotify;
-- installs with a standard Tauri (NSIS) installer, for the current user only.
+- installs for the current user only, with its own small installer
+  (`apps/setup`) that writes nothing but what is listed under *Where files
+  go*. Like most uninstallers, `uninstall.exe` runs a copy of itself from the
+  temporary folder, so it can remove its own file.
 
 Planned for releases: programs built by GitHub Actions and signed through the
 [SignPath Foundation](https://signpath.org) (free signing for open-source

@@ -19,11 +19,15 @@ apps/desktop/
     src/model.rs       what the window shows, built from the core's types
     src/terminal.rs    the Terminal tab (runs the bundled `spacetify`)
     src/tray.rs        the notification-area icon and its menu
-    windows/hooks.nsh  installer steps (Path, notifications, startup entry)
     icons/             app, tray and notification icons (from assets/)
+  setup/               the installer's window (Svelte), sharing the app's look
+    Setup.svelte       every screen and the way from one to the next
+    mock.ts            a fake Rust side, to see each screen in a browser
   assets/              logo sources (SVG)
-  scripts/sidecars.mjs builds the CLI and the service for the installer
+  scripts/bundle.mjs   builds the Windows installer
 ```
+
+The installer's Rust side is in [`apps/setup`](../setup).
 
 ## Working on it
 
@@ -57,18 +61,40 @@ npm ci
 npm run bundle
 ```
 
-`npm run bundle` builds `spacetify` and `spacetify-service` in release mode,
-copies them to `src-tauri/binaries/` under the names Tauri expects, then runs
-`tauri build`. The installer lands in
-`target/release/bundle/nsis/spacetify_<version>_x64-setup.exe`. Set
+`npm run bundle` (`scripts/bundle.mjs`) builds the three programs in release
+mode, then `uninstall.exe` (the installer program with nothing inside),
+gathers the files to install in `target/setup-payload`, and builds the
+installer with them inside. It lands in
+`target/release/bundle/setup/spacetify_<version>_x64-setup.exe`. Set
 `CARGO_TARGET_DIR` to build somewhere else (useful while a service built from
 `target/release` is running, since Windows locks its file).
 
+The installer is spacetify's own (`apps/setup`, Rust, with its window in
+`setup/`), so it has the app's look and explains every problem in plain
+words: spacetify already open (it offers to close it), a file blocked by an
+antivirus, a full disk, a newer version already installed, a step that
+failed after the files were copied (it can be run again). It also repairs,
+updates and uninstalls. To see every screen in a browser:
+
+```sh
+npm run dev:setup    # then open http://localhost:1421/?s=update
+```
+
+with `?s=` one of `fresh`, `older`, `same`, `newer`, `uninstall`,
+`running`, `diskfull`, `blocked`, `inuse`, `other`, `partial`,
+`restorefail` (see `setup/mock.ts`).
+
+The files are copied all or nothing: everything is unpacked next to the old
+files first, then swapped in; if anything fails, the old files are put back.
+Only the files listed in `apps/setup/src/files.rs` are ever replaced or
+removed.
+
 What it does, for the current user only and without admin rights:
 
-- installs `spacetify-app.exe` (the window), `spacetify.exe` (the CLI) and
-  `spacetify-service.exe` in `%LOCALAPPDATA%\spacetify`, with a Start menu
-  entry, and the example theme and extension;
+- installs `spacetify-app.exe` (the window), `spacetify.exe` (the CLI),
+  `spacetify-service.exe` and `uninstall.exe` in `%LOCALAPPDATA%\spacetify`,
+  with shortcuts in the Start menu and on the desktop, an entry in
+  *Settings > Apps*, and the example theme and extension;
 - adds that folder to the user `Path`, so `spacetify` works in any new
   terminal;
 - registers the name and icon of notifications
@@ -83,13 +109,13 @@ and the notification name, and offers to put Spotify back to its original
 state first ("No" by default). Mods, settings and backups are never deleted:
 they stay in `%APPDATA%\spacetify` and `%LOCALAPPDATA%\spacetify`.
 
-These steps run `spacetify.exe installer post-install` and
-`spacetify.exe installer pre-uninstall` (hidden commands, code in
-`crates/core/src/setup.rs`), so they are tested and print what they do in the
-installer's details.
+These steps are in `crates/core/src/setup.rs`, so they are tested; the
+installer runs them one by one and writes what it did to a log it can open.
+`spacetify installer post-install` and `pre-uninstall` (hidden commands) run
+the same steps.
 
-Note: Tauri installs per-user apps in `%LOCALAPPDATA%\<name>`, which is also
-where spacetify keeps its backups. The uninstaller only deletes the files it
+Note: the install folder, `%LOCALAPPDATA%\spacetify`, is also where
+spacetify keeps its backups. The uninstaller only deletes the files it
 installed and never a folder that is not empty, so backups are safe.
 
 ## Signing
@@ -105,7 +131,7 @@ artifact configuration in `.signpath/artifact-configuration.xml` (slug
 
 That configuration signs the installer and the three programs uploaded next
 to it. The copies packed inside the installer are not signed yet: that needs
-Tauri's `bundle.windows.signCommand` to call SignPath for each file, to add
+a signing step in `scripts/bundle.mjs` before the files are packed, to add
 once the account exists.
 
 ## Automatic updates of the app
