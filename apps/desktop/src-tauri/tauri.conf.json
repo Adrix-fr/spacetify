@@ -28,8 +28,7 @@
     }
   },
   "bundle": {
-    "active": true,
-    "targets": ["nsis"],
+    "active": false,
     "publisher": "Adrix-fr (spacetify project)",
     "copyright": "GPL-3.0-or-later",
     "license": "GPL-3.0-or-later",
@@ -47,15 +46,6 @@
     "resources": {
       "../../../examples/": "examples/",
       "icons/notification.png": "icon.png"
-    },
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser",
-        "installerHooks": "./windows/hooks.nsh",
-        "installerIcon": "icons/icon.ico",
-        "languages": ["English", "French"],
-        "displayLanguageSelector": false
-      }
     }
   }
 }
