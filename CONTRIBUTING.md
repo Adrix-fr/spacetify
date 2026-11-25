@@ -32,6 +32,15 @@ cargo test --workspace
   temporary folder.
 - **Keep the patch minimal.** Do not rewrite Spotify's own code; it is what
   breaks other tools after every update.
+- **Mods are untrusted input.** Everything a theme or extension provides is
+  validated in `crates/core/src/mods` before it is injected, with a message
+  that says what to fix (`ModIssue`, in English and French).
+- **The injected runtime must never break Spotify.** Every call into an
+  extension in `crates/core/assets/runtime.js` goes through the error guard.
+  Check its syntax with `node --check crates/core/assets/runtime.js`.
+- **Examples stay valid.** `crates/core/tests/examples.rs` loads the mods in
+  `examples/`. If you change the mod format, update the examples and the
+  guides in `docs/`.
 - **User-facing text comes in English and French.** Use the `tr!` macro for
   messages and add both languages to `Error::localized` for new errors.
 - **Commit messages** are short, in English, in the imperative mood

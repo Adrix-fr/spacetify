@@ -2,10 +2,10 @@
 
 A mod manager for the Spotify desktop client, built to survive Spotify updates.
 
-> **Status: early development (phase 1).** The core, the CLI and a proof of
-> injection work on Windows. Themes, extensions, the desktop app and automatic
-> repair after updates are not there yet. macOS and Linux are supported in the
-> code but untested.
+> **Status: early development (phase 2).** The core, the CLI, themes and
+> extensions work on Windows. The desktop app and automatic repair after
+> updates are not there yet. macOS and Linux are supported in the code but
+> untested.
 
 ## Why
 
@@ -24,6 +24,12 @@ spacetify takes a different approach:
   older interface over a newer one.
 - **No file changes at all, if you prefer.** `launch --live` injects at
   runtime through Chromium's debugging protocol instead.
+- **Mods built on stable hooks.** Themes and extensions rely on Spotify's
+  colour variables and `data-testid` attributes, not on generated class
+  names. `spacetify doctor` checks them against the installed Spotify and
+  warns before something breaks.
+- **One broken mod never breaks Spotify.** Each extension runs on its own,
+  and mods are validated before anything is injected.
 
 ## Install
 
@@ -49,12 +55,37 @@ Run `spacetify` on its own to open the interactive menu (arrow keys, Enter,
 | `spacetify restore`       | Put back the original file, verified by hash       |
 | `spacetify launch`        | Start Spotify                                      |
 | `spacetify launch --live` | Start Spotify and inject without touching any file |
+| `spacetify list`          | Installed themes and extensions                    |
+| `spacetify install DIR`   | Install a theme or an extension, and turn it on    |
+| `spacetify uninstall ID`  | Delete an installed theme or extension             |
+| `spacetify enable ID`     | Turn an extension on, or make a theme active       |
+| `spacetify disable ID`    | Turn an extension or the active theme off          |
+| `spacetify theme ID`      | Choose the active theme (`none` for Spotify's own) |
+| `spacetify doctor`        | Check the active mods against the installed Spotify |
 
 Useful options: `--yes` closes Spotify without asking, `--lang en|fr` picks the
 language, `--spotify-path DIR` points to a custom install, `-v` shows logs.
 
 The interface is available in English and French. By default it follows the
 system language.
+
+### Themes and extensions
+
+```sh
+spacetify install examples/themes/midnight
+spacetify install examples/extensions/hello-badge
+spacetify doctor
+spacetify apply
+```
+
+One theme is active at a time; any number of extensions can be on. Changes
+show in Spotify after the next `apply` (or `launch --live`). `restore` takes
+everything out again.
+
+Making your own: see [docs/themes.md](docs/themes.md) and
+[docs/extensions.md](docs/extensions.md). Spicetify themes and extensions do
+not work as they are, because they rely on changes Spicetify makes to
+Spotify's code; the guides explain what can be carried over.
 
 ### Safety rules
 
@@ -75,7 +106,11 @@ control it. Use it if you understand that trade-off.
 | What    | Windows                    | macOS                                     | Linux                      |
 | ------- | -------------------------- | ----------------------------------------- | -------------------------- |
 | Config  | `%APPDATA%\spacetify`      | `~/Library/Application Support/spacetify` | `~/.config/spacetify`      |
+| Mods    | `%APPDATA%\spacetify`      | `~/Library/Application Support/spacetify` | `~/.config/spacetify`      |
 | Backups | `%LOCALAPPDATA%\spacetify` | `~/Library/Application Support/spacetify` | `~/.local/share/spacetify` |
+
+Mods go in the `themes` and `extensions` folders, and `config.toml` remembers
+which ones are on.
 
 Set `SPACETIFY_HOME` to keep everything in a single folder instead.
 
@@ -87,12 +122,17 @@ crates/
     src/spotify.rs    find the install, read its version, start/stop it
     src/detect.rs     tell original, patched and Spicetify files apart
     src/backup.rs     hashed backups and atomic writes
-    src/patcher/      file-based patch (mod.rs) and live injection (live.rs)
+    src/patcher/      file-based patch (mod.rs), live injection (live.rs)
+                      and the injected payload (payload.rs)
+    src/mods/         themes and extensions: manifests, checks, install
+    src/doctor.rs     compatibility checks against the installed Spotify
     src/config.rs     config.toml and app folders
-    assets/           what gets injected
+    assets/runtime.js the code injected into Spotify that runs extensions
   cli/       the `spacetify` binary: menu and commands
 apps/
   desktop/   future Tauri app (not started)
+docs/        guides for theme and extension authors
+examples/    an example theme and an example extension
 ```
 
 ## Development
@@ -103,8 +143,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Tests build fake `xpui.spa` archives in temporary folders. They never touch a
-real Spotify install.
+Tests build fake `xpui.spa` archives and fake mods in temporary folders.
+They never touch a real Spotify install.
 
 Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -112,6 +152,7 @@ Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 1. ~~Core, CLI, backup/restore, proof of injection~~
 2. Themes and extensions that rely on stable selectors and CSS variables
+   (in progress)
 3. Background service that re-applies mods after a Spotify update
 4. Desktop app (Tauri) with an installer
 
