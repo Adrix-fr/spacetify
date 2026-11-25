@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::mods::ModStore;
 use crate::{APP_NAME, Error, Result};
 
 /// Contents of `config.toml`. Every field is optional.
@@ -16,6 +17,11 @@ pub struct Config {
     pub spotify_path: Option<PathBuf>,
     /// `en` or `fr`. Unset means the system language.
     pub language: Option<String>,
+    /// Id of the active theme. Unset means Spotify's own look.
+    pub theme: Option<String>,
+    /// Ids of the enabled extensions, in loading order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub extensions: Vec<String>,
 }
 
 impl Config {
@@ -77,6 +83,11 @@ impl AppDirs {
     pub fn backups_dir(&self) -> PathBuf {
         self.data_dir.join("backups")
     }
+
+    /// Installed themes and extensions live next to the config file.
+    pub fn mods(&self) -> ModStore {
+        ModStore::new(&self.config_dir)
+    }
 }
 
 #[cfg(test)]
@@ -97,6 +108,8 @@ mod tests {
         let config = Config {
             spotify_path: Some(PathBuf::from("/opt/spotify")),
             language: Some("fr".into()),
+            theme: Some("midnight".into()),
+            extensions: vec!["hello-badge".into()],
         };
         config.save(&path).unwrap();
         assert_eq!(Config::load(&path).unwrap(), config);

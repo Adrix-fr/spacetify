@@ -5,13 +5,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use spacetify_core::backup::BackupStore;
+use spacetify_core::config::Config;
 use spacetify_core::detect::{self, UiState};
-use spacetify_core::patcher::{self, ApplyOutcome, BackupOutcome, RestoreOutcome, live};
+use spacetify_core::mods::ModStore;
+use spacetify_core::patcher::{self, ApplyOutcome, BackupOutcome, Payload, RestoreOutcome, live};
 use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
 use crate::args::Command;
-use crate::ui;
+use crate::{mod_commands, ui};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -19,16 +21,29 @@ pub struct Context {
     pub lang: Lang,
     pub spotify_path: Option<PathBuf>,
     pub backups_dir: PathBuf,
+    pub config_dir: PathBuf,
     pub config_file: PathBuf,
 }
 
 impl Context {
-    fn install(&self) -> Result<SpotifyInstall> {
+    pub fn install(&self) -> Result<SpotifyInstall> {
         spotify::locate(self.spotify_path.as_deref())
     }
 
     fn store(&self) -> BackupStore {
         BackupStore::new(&self.backups_dir)
+    }
+
+    pub fn mods(&self) -> ModStore {
+        ModStore::new(&self.config_dir)
+    }
+
+    pub fn config(&self) -> Result<Config> {
+        Config::load(&self.config_file)
+    }
+
+    pub fn save(&self, config: &Config) -> Result<()> {
+        config.save(&self.config_file)
     }
 }
 
@@ -39,6 +54,13 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Apply(args) => apply(ctx, args.yes),
         Command::Restore(args) => restore(ctx, args.yes),
         Command::Launch(args) => launch(ctx, args.live, args.close.yes),
+        Command::List => mod_commands::list(ctx),
+        Command::Install { path } => mod_commands::install(ctx, &path),
+        Command::Uninstall { id } => mod_commands::uninstall(ctx, &id),
+        Command::Enable { id } => mod_commands::enable(ctx, &id),
+        Command::Disable { id } => mod_commands::disable(ctx, &id),
+        Command::Theme { id } => mod_commands::theme(ctx, &id),
+        Command::Doctor => mod_commands::doctor(ctx),
     }
 }
 
@@ -164,9 +186,13 @@ pub fn apply(ctx: &Context, yes: bool) -> Result<()> {
     let lang = ctx.lang;
     let install = ctx.install()?;
     install.ensure_modifiable()?;
+    let mods = mod_commands::active_mods(ctx)?;
+    mod_commands::print_active(lang, &mods);
+    mod_commands::quick_check(ctx, &mods);
+    println!();
     let closed = close_if_running(lang, yes)?;
 
-    let result = patcher::apply(&install, &ctx.store());
+    let result = patcher::apply(&install, &ctx.store(), &Payload::new(&mods));
     match &result {
         Ok(ApplyOutcome::Applied { new_backup, sha256 }) => {
             if *new_backup {
@@ -257,9 +283,12 @@ pub fn launch(ctx: &Context, live_mode: bool, yes: bool) -> Result<()> {
          Tant qu'il tourne, d'autres programmes de cet ordinateur pourraient contrôler Spotify."
     ));
     println!();
+    let mods = mod_commands::active_mods(ctx)?;
+    mod_commands::print_active(lang, &mods);
+    println!();
     close_if_running(lang, yes)?;
     ui::hint(tr!(lang, "Starting Spotify…", "Lancement de Spotify…"));
-    live::run(&install, || {
+    live::run(&install, &Payload::new(&mods), || {
         ui::success(tr!(
             lang,
             "Injected. Keep this window open while you use Spotify.",

@@ -40,6 +40,37 @@ pub enum Command {
     Restore(CloseArgs),
     /// Start Spotify
     Launch(LaunchArgs),
+    /// List installed themes and extensions
+    #[command(visible_alias = "ls")]
+    List,
+    /// Install a theme or an extension from a folder, and turn it on
+    Install {
+        /// Folder that contains theme.toml or extension.toml
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+    },
+    /// Delete an installed theme or extension
+    Uninstall {
+        #[arg(value_name = "ID")]
+        id: String,
+    },
+    /// Turn on an extension, or make a theme the active one
+    Enable {
+        #[arg(value_name = "ID")]
+        id: String,
+    },
+    /// Turn off an extension or the active theme
+    Disable {
+        #[arg(value_name = "ID")]
+        id: String,
+    },
+    /// Choose the active theme (`none` for Spotify's own look)
+    Theme {
+        #[arg(value_name = "ID")]
+        id: String,
+    },
+    /// Check that the active mods still match this version of Spotify
+    Doctor,
 }
 
 #[derive(Debug, Args)]
@@ -124,6 +155,30 @@ fn in_french(command: clap::Command) -> clap::Command {
                 })
                 .mut_arg("yes", |a| a.help(YES))
         })
+        .mut_subcommand("list", |c| {
+            c.about("Lister les thèmes et extensions installés")
+        })
+        .mut_subcommand("install", |c| {
+            c.about("Installer un thème ou une extension depuis un dossier, et l'activer")
+                .mut_arg("path", |a| {
+                    a.help("Dossier qui contient theme.toml ou extension.toml")
+                })
+        })
+        .mut_subcommand("uninstall", |c| {
+            c.about("Supprimer un thème ou une extension installé")
+        })
+        .mut_subcommand("enable", |c| {
+            c.about("Activer une extension, ou choisir un thème comme thème actif")
+        })
+        .mut_subcommand("disable", |c| {
+            c.about("Désactiver une extension ou le thème actif")
+        })
+        .mut_subcommand("theme", |c| {
+            c.about("Choisir le thème actif (`none` pour le look d'origine de Spotify)")
+        })
+        .mut_subcommand("doctor", |c| {
+            c.about("Vérifier que les mods actifs correspondent encore à cette version de Spotify")
+        })
 }
 
 #[cfg(test)]
@@ -145,6 +200,13 @@ mod tests {
         ));
         assert_eq!(cli.lang, Some(Lang::Fr));
         assert!(Cli::try_parse_from(["spacetify", "status", "--lang", "de"]).is_err());
+        let cli = Cli::try_parse_from(["spacetify", "install", "my theme"]).unwrap();
+        assert!(
+            matches!(cli.command, Some(Command::Install { path }) if path.as_os_str() == "my theme")
+        );
+        let cli = Cli::try_parse_from(["spacetify", "ls"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::List)));
+        assert!(Cli::try_parse_from(["spacetify", "theme"]).is_err());
         assert!(
             Cli::try_parse_from(["spacetify"])
                 .unwrap()

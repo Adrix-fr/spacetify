@@ -99,6 +99,17 @@ pub fn confirm(question: &str) -> bool {
     yes
 }
 
+/// Asks for a line of text. Surrounding quotes are removed, since dragging a
+/// folder into a terminal often adds them. `None` if the answer is empty.
+pub fn ask_line(question: &str) -> Option<String> {
+    print!("{} {question} ", paint("?", |s| s.with(ACCENT).bold()));
+    let _ = io::stdout().flush();
+    let mut answer = String::new();
+    io::stdin().lock().read_line(&mut answer).ok()?;
+    let answer = answer.trim().trim_matches(['"', '\'']).trim();
+    (!answer.is_empty()).then(|| answer.to_owned())
+}
+
 fn read_yes_key() -> io::Result<bool> {
     let _raw = RawMode::enable()?;
     let key = next_key()?;

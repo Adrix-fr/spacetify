@@ -834,7 +834,7 @@ checksum = "3244542535d5de959d90ec55d1b5ff0fd2bb7b1310223907d5f11932847f7b59"
 
 [[package]]
 name = "spacetify-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "crossterm",
@@ -844,10 +844,11 @@ dependencies = [
 
 [[package]]
 name = "spacetify-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dirs",
  "humantime",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

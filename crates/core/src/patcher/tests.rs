@@ -7,6 +7,10 @@ use super::*;
 use crate::spotify::InstallKind;
 use crate::testing::{Fixture, ORIGINAL_INDEX, write_spa};
 
+fn empty() -> Payload {
+    Payload::new(&crate::mods::ActiveMods::default())
+}
+
 fn read_entries(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
     let mut archive = ZipArchive::new(Cursor::new(bytes)).unwrap();
     (0..archive.len())
@@ -39,7 +43,7 @@ fn patched_archive_keeps_every_original_entry() {
     let fx = Fixture::new();
     let spa = fx.install.xpui_spa();
     let original = read_entries(&fs::read(&spa).unwrap());
-    let patched = read_entries(&build_patched(&spa, &Marker::new("abc")).unwrap());
+    let patched = read_entries(&build_patched(&spa, &Marker::new("abc"), &empty()).unwrap());
 
     for (name, content) in &original {
         let (_, new_content) = patched.iter().find(|(n, _)| n == name).unwrap();
@@ -59,8 +63,8 @@ fn patched_archive_keeps_every_original_entry() {
 fn patching_is_reproducible() {
     let fx = Fixture::new();
     let marker = Marker::new("abc");
-    let first = build_patched(&fx.install.xpui_spa(), &marker).unwrap();
-    let second = build_patched(&fx.install.xpui_spa(), &marker).unwrap();
+    let first = build_patched(&fx.install.xpui_spa(), &marker, &empty()).unwrap();
+    let second = build_patched(&fx.install.xpui_spa(), &marker, &empty()).unwrap();
     assert_eq!(first, second);
 }
 
@@ -69,7 +73,7 @@ fn apply_backs_up_then_patches() {
     let fx = Fixture::new();
     let original_sha = fx.spa_sha();
 
-    let outcome = apply_unchecked(&fx.install, &fx.store).unwrap();
+    let outcome = apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     let ApplyOutcome::Applied { new_backup, sha256 } = outcome else {
         panic!("expected Applied, got {outcome:?}");
     };
@@ -88,11 +92,11 @@ fn apply_backs_up_then_patches() {
 #[test]
 fn apply_is_idempotent() {
     let fx = Fixture::new();
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     let patched_sha = fx.spa_sha();
 
     assert_eq!(
-        apply_unchecked(&fx.install, &fx.store).unwrap(),
+        apply_unchecked(&fx.install, &fx.store, &empty()).unwrap(),
         ApplyOutcome::AlreadyApplied
     );
     assert_eq!(fx.spa_sha(), patched_sha);
@@ -105,7 +109,7 @@ fn restore_gives_back_the_exact_original() {
     let original_bytes = fs::read(fx.install.xpui_spa()).unwrap();
     let original_sha = fx.spa_sha();
 
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     let outcome = restore_unchecked(&fx.install, &fx.store).unwrap();
 
     assert_eq!(
@@ -126,7 +130,7 @@ fn restore_gives_back_the_exact_original() {
 #[test]
 fn restore_never_downgrades_after_a_spotify_update() {
     let fx = Fixture::new();
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
 
     // Spotify updates and ships a new original interface.
     write_spa(
@@ -142,7 +146,7 @@ fn restore_never_downgrades_after_a_spotify_update() {
     assert_eq!(fx.spa_sha(), updated_sha);
 
     // Applying again backs up the new version and patches it.
-    let outcome = apply_unchecked(&fx.install, &fx.store).unwrap();
+    let outcome = apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     assert!(matches!(
         outcome,
         ApplyOutcome::Applied {
@@ -164,7 +168,7 @@ fn refuses_to_touch_spicetify() {
     let before = fx.spa_sha();
 
     assert!(matches!(
-        apply_unchecked(&fx.install, &fx.store),
+        apply_unchecked(&fx.install, &fx.store, &empty()),
         Err(Error::SpicetifyActive)
     ));
     assert!(matches!(
@@ -182,7 +186,7 @@ fn works_next_to_spicetify_leftovers_without_touching_them() {
     let leftover = fx.install.xpui_dir().join("index.html");
     let leftover_before = fs::read(&leftover).unwrap();
 
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     restore_unchecked(&fx.install, &fx.store).unwrap();
     assert_eq!(fs::read(&leftover).unwrap(), leftover_before);
 }
@@ -192,7 +196,7 @@ fn refuses_read_only_installs() {
     let mut fx = Fixture::new();
     fx.install.kind = InstallKind::MicrosoftStore;
     assert!(matches!(
-        apply_unchecked(&fx.install, &fx.store),
+        apply_unchecked(&fx.install, &fx.store, &empty()),
         Err(Error::ReadOnlyInstall { .. })
     ));
 }
@@ -201,7 +205,7 @@ fn refuses_read_only_installs() {
 fn restore_refuses_a_damaged_backup() {
     let fx = Fixture::new();
     let original_sha = fx.spa_sha();
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     let patched_sha = fx.spa_sha();
 
     let record = fx.store.find(&original_sha).unwrap().unwrap();
@@ -228,7 +232,7 @@ fn backup_command_does_not_modify_spotify() {
     ));
     assert_eq!(fx.spa_sha(), before);
 
-    apply_unchecked(&fx.install, &fx.store).unwrap();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
     let outcome = backup(&fx.install, &fx.store).unwrap();
     assert!(matches!(outcome, BackupOutcome::OriginalOfPatched(ref r) if r.sha256 == before));
 }

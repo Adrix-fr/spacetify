@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tungstenite::Message;
 
-use super::payload;
+use super::Payload;
 use crate::spotify::{self, SpotifyInstall};
 use crate::{Error, Result};
 
@@ -35,7 +35,7 @@ struct Target {
 /// Starts Spotify, injects the payload and stays attached until Spotify exits.
 ///
 /// `on_ready` is called once the payload is in place.
-pub fn run(install: &SpotifyInstall, on_ready: impl FnOnce()) -> Result<()> {
+pub fn run(install: &SpotifyInstall, payload: &Payload, on_ready: impl FnOnce()) -> Result<()> {
     if spotify::is_running()? {
         return Err(Error::SpotifyRunning);
     }
@@ -44,17 +44,7 @@ pub fn run(install: &SpotifyInstall, on_ready: impl FnOnce()) -> Result<()> {
 
     let ws_url = wait_for_ui(port)?;
     let (mut socket, _) = tungstenite::connect(ws_url.as_str()).map_err(live_err)?;
-    let script = payload::live_script();
-
-    let commands = [
-        (1, "Page.enable", json!({})),
-        (
-            2,
-            "Page.addScriptToEvaluateOnNewDocument",
-            json!({ "source": script }),
-        ),
-        (3, "Runtime.evaluate", json!({ "expression": script })),
-    ];
+    let commands = commands(&payload.live_scripts());
     for (id, method, params) in &commands {
         let message = json!({ "id": id, "method": method, "params": params });
         socket
@@ -62,7 +52,7 @@ pub fn run(install: &SpotifyInstall, on_ready: impl FnOnce()) -> Result<()> {
             .map_err(live_err)?;
     }
 
-    let mut pending: Vec<u64> = vec![1, 2, 3];
+    let mut pending: Vec<u64> = commands.iter().map(|(id, _, _)| *id).collect();
     while !pending.is_empty() {
         let message = socket.read().map_err(live_err)?;
         let Ok(reply) = serde_json::from_str::<Value>(message.to_text().unwrap_or_default()) else {
@@ -71,11 +61,13 @@ pub fn run(install: &SpotifyInstall, on_ready: impl FnOnce()) -> Result<()> {
         let Some(id) = reply["id"].as_u64() else {
             continue;
         };
-        if let Some(error) = reply
-            .get("error")
-            .or_else(|| reply["result"].get("exceptionDetails"))
-        {
+        if let Some(error) = reply.get("error") {
             return Err(Error::Live(error.to_string()));
+        }
+        // An extension that throws is the runtime's business: it is logged
+        // in Spotify's console and must not stop the other mods.
+        if let Some(exception) = reply["result"].get("exceptionDetails") {
+            tracing::warn!("a mod script threw while starting: {exception}");
         }
         pending.retain(|&p| p != id);
     }
@@ -85,6 +77,22 @@ pub fn run(install: &SpotifyInstall, on_ready: impl FnOnce()) -> Result<()> {
     // Keep the session open: the injected script survives reloads only while we are attached.
     while socket.read().is_ok() {}
     Ok(())
+}
+
+/// Each script is registered for future page loads (Spotify reloads its
+/// interface sometimes) and run once in the page that is already open.
+fn commands(scripts: &[String]) -> Vec<(u64, &'static str, Value)> {
+    let mut commands = vec![(1, "Page.enable", json!({}))];
+    for script in scripts {
+        let id = commands.len() as u64 + 1;
+        commands.push((
+            id,
+            "Page.addScriptToEvaluateOnNewDocument",
+            json!({ "source": script }),
+        ));
+        commands.push((id + 1, "Runtime.evaluate", json!({ "expression": script })));
+    }
+    commands
 }
 
 /// Asks the OS for a free port, so two sessions never collide.
@@ -186,6 +194,16 @@ Content-Length:2
         assert_eq!(http_get(port, "/json/list").unwrap(), "[]");
         assert!(started.elapsed() < Duration::from_secs(2));
         drop(server);
+    }
+
+    #[test]
+    fn sends_every_script_twice_with_unique_ids() {
+        let scripts = ["a".to_owned(), "b".to_owned()];
+        let commands = commands(&scripts);
+        let ids: Vec<u64> = commands.iter().map(|(id, _, _)| *id).collect();
+        assert_eq!(ids, [1, 2, 3, 4, 5]);
+        assert_eq!(commands[3].1, "Page.addScriptToEvaluateOnNewDocument");
+        assert_eq!(commands[4].2["expression"], "b");
     }
 
     #[test]

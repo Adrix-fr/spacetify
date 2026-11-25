@@ -7,6 +7,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::Lang;
+use crate::mods::{ModIssue, ModKind};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -81,6 +82,26 @@ pub enum Error {
     #[error("Live injection failed: {0}")]
     Live(String),
 
+    #[error("{what} was refused: {issue}")]
+    InvalidMod { what: String, issue: ModIssue },
+
+    #[error(
+        "No theme or extension named `{0}` is installed. `spacetify list` shows what is installed."
+    )]
+    ModNotFound(String),
+
+    #[error("`{0}` is an extension, not a theme.")]
+    NotATheme(String),
+
+    #[error("The id `{id}` is already used by an installed {}. Ids must be unique.", .kind.label(Lang::En))]
+    IdTaken { id: String, kind: ModKind },
+
+    #[error("{} is already in spacetify's mods folder. Install from your own copy of the mod instead.", .0.display())]
+    InstallFromStore(PathBuf),
+
+    #[error("{0} problem(s) found with your mods for this version of Spotify. Details are above.")]
+    Incompatible(usize),
+
     #[error("File error on {}: {source}", .path.display())]
     Io {
         path: PathBuf,
@@ -125,6 +146,12 @@ impl Error {
             Self::CloseFailed => "Impossible de fermer Spotify. Ferme-le à la main puis réessaie.".into(),
             Self::Launch(reason) => format!("Impossible de lancer Spotify : {reason}"),
             Self::Live(reason) => format!("L'injection en direct a échoué : {reason}"),
+            Self::InvalidMod { what, issue } => format!("{what} est refusé : {}", issue.localized(Lang::Fr)),
+            Self::ModNotFound(id) => format!("Aucun thème ni extension nommé `{id}` n'est installé. `spacetify list` montre ce qui est installé."),
+            Self::NotATheme(id) => format!("`{id}` est une extension, pas un thème."),
+            Self::IdTaken { id, kind } => format!("L'identifiant `{id}` est déjà pris par un(e) {} installé(e). Chaque identifiant doit être unique.", kind.label(Lang::Fr)),
+            Self::InstallFromStore(path) => format!("{} est déjà dans le dossier des mods de spacetify. Installe plutôt depuis ta propre copie du mod.", path.display()),
+            Self::Incompatible(count) => format!("{count} problème(s) trouvé(s) avec tes mods pour cette version de Spotify. Le détail est au-dessus."),
             Self::Io { path, source } => format!("Erreur de fichier sur {} : {source}", path.display()),
         }
     }

@@ -7,6 +7,7 @@ mod args;
 mod commands;
 mod interactive;
 mod menu;
+mod mod_commands;
 mod ui;
 
 use std::process::ExitCode;
@@ -55,6 +56,7 @@ fn context(cli: &Cli) -> Result<Context> {
         spotify_path: cli.spotify_path.clone().or(config.spotify_path),
         backups_dir: dirs.backups_dir(),
         config_file: dirs.config_file(),
+        config_dir: dirs.config_dir.clone(),
     })
 }
 

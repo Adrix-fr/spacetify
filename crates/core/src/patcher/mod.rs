@@ -11,6 +11,8 @@
 pub mod live;
 mod payload;
 
+pub use payload::Payload;
+
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Write};
 use std::path::Path;
@@ -90,10 +92,14 @@ pub fn backup(install: &SpotifyInstall, store: &BackupStore) -> Result<BackupOut
     }
 }
 
-/// Backs up, then patches Spotify. Refuses while Spotify is running.
-pub fn apply(install: &SpotifyInstall, store: &BackupStore) -> Result<ApplyOutcome> {
+/// Backs up, then patches Spotify with `payload`. Refuses while Spotify is running.
+pub fn apply(
+    install: &SpotifyInstall,
+    store: &BackupStore,
+    payload: &Payload,
+) -> Result<ApplyOutcome> {
     ensure_closed()?;
-    apply_unchecked(install, store)
+    apply_unchecked(install, store, payload)
 }
 
 /// Puts back the original interface. Refuses while Spotify is running.
@@ -105,6 +111,7 @@ pub fn restore(install: &SpotifyInstall, store: &BackupStore) -> Result<RestoreO
 pub(crate) fn apply_unchecked(
     install: &SpotifyInstall,
     store: &BackupStore,
+    payload: &Payload,
 ) -> Result<ApplyOutcome> {
     install.ensure_modifiable()?;
     let spa = install.xpui_spa();
@@ -116,7 +123,11 @@ pub(crate) fn apply_unchecked(
         other => return Err(refusal(install, other)),
     };
 
-    let patched = build_patched(&store.file_for(&original), &Marker::new(&original.sha256))?;
+    let patched = build_patched(
+        &store.file_for(&original),
+        &Marker::new(&original.sha256),
+        payload,
+    )?;
     let sha256 = backup::sha256_bytes(&patched);
     if inspection.sha256.as_deref() == Some(sha256.as_str()) {
         return Ok(ApplyOutcome::AlreadyApplied);
@@ -163,7 +174,7 @@ pub(crate) fn restore_unchecked(
 ///
 /// Entries are copied raw, in their original order, so only `index.html` and
 /// our own files differ from the source.
-pub fn build_patched(original: &Path, marker: &Marker) -> Result<Vec<u8>> {
+pub fn build_patched(original: &Path, marker: &Marker, payload: &Payload) -> Result<Vec<u8>> {
     let zip_err = |err: zip::result::ZipError| Error::InvalidArchive {
         path: original.to_path_buf(),
         reason: err.to_string(),
@@ -204,7 +215,7 @@ pub fn build_patched(original: &Path, marker: &Marker) -> Result<Vec<u8>> {
         });
     }
 
-    for (name, content) in payload::files(marker) {
+    for (name, content) in payload.files(marker) {
         out.start_file(name, file_options()).map_err(zip_err)?;
         out.write_all(&content).map_err(Error::io(original))?;
     }

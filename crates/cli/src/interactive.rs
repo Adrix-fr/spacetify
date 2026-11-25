@@ -1,13 +1,16 @@
 //! The menu shown when `spacetify` runs without a subcommand.
 
 use std::io;
+use std::path::PathBuf;
 
 use crossterm::style::Stylize;
 use spacetify_core::config::Config;
+use spacetify_core::mods::ModKind;
 use spacetify_core::{Lang, Result, detect, spotify, tr};
 
 use crate::commands::{self, Context};
 use crate::menu::{self, Entry};
+use crate::mod_commands;
 use crate::ui::{self, ACCENT, paint};
 
 #[derive(Clone, Copy)]
@@ -18,6 +21,12 @@ enum Action {
     Status,
     Launch,
     LaunchLive,
+    ListMods,
+    InstallMod,
+    ChooseTheme,
+    ToggleExtensions,
+    UninstallMod,
+    Doctor,
     Language,
     Quit,
 }
@@ -44,6 +53,12 @@ pub fn run(ctx: &mut Context) -> io::Result<()> {
             Action::Status => screen(ctx, title, commands::status)?,
             Action::Launch => screen(ctx, title, |ctx| commands::launch(ctx, false, false))?,
             Action::LaunchLive => screen(ctx, title, |ctx| commands::launch(ctx, true, false))?,
+            Action::ListMods => screen(ctx, title, mod_commands::list)?,
+            Action::InstallMod => screen(ctx, title, install_mod)?,
+            Action::ChooseTheme => choose_theme(ctx, title)?,
+            Action::ToggleExtensions => toggle_extensions(ctx, title)?,
+            Action::UninstallMod => uninstall_mod(ctx, title)?,
+            Action::Doctor => screen(ctx, title, mod_commands::doctor)?,
         }
     }
 }
@@ -114,6 +129,50 @@ fn items(lang: Lang) -> Items {
         ),
     );
 
+    items.section(tr!(lang, "Themes and extensions", "Thèmes et extensions"));
+    items.choice(
+        Action::ListMods,
+        tr!(lang, "Installed mods", "Mods installés"),
+        tr!(
+            lang,
+            "what is installed and on",
+            "ce qui est installé et activé"
+        ),
+    );
+    items.choice(
+        Action::InstallMod,
+        tr!(lang, "Install from a folder", "Installer depuis un dossier"),
+        tr!(lang, "a theme or an extension", "un thème ou une extension"),
+    );
+    items.choice(
+        Action::ChooseTheme,
+        tr!(lang, "Choose the theme", "Choisir le thème"),
+        "",
+    );
+    items.choice(
+        Action::ToggleExtensions,
+        tr!(
+            lang,
+            "Turn extensions on/off",
+            "Activer/désactiver des extensions"
+        ),
+        "",
+    );
+    items.choice(
+        Action::UninstallMod,
+        tr!(lang, "Uninstall a mod", "Désinstaller un mod"),
+        "",
+    );
+    items.choice(
+        Action::Doctor,
+        tr!(lang, "Check compatibility", "Vérifier la compatibilité"),
+        tr!(
+            lang,
+            "with this version of Spotify",
+            "avec cette version de Spotify"
+        ),
+    );
+
     items.section("Spotify");
     items.choice(
         Action::Status,
@@ -145,6 +204,163 @@ fn items(lang: Lang) -> Items {
     items.section("");
     items.choice(Action::Quit, tr!(lang, "Quit", "Quitter"), "");
     items
+}
+
+fn install_mod(ctx: &Context) -> Result<()> {
+    let lang = ctx.lang;
+    let question = tr!(
+        lang,
+        "Folder of the theme or extension (you can drag it here):",
+        "Dossier du thème ou de l'extension (tu peux le glisser ici) :"
+    );
+    match ui::ask_line(&question) {
+        Some(path) => mod_commands::install(ctx, &PathBuf::from(path)),
+        None => Ok(()),
+    }
+}
+
+/// Installed mods of one kind, as `(id, label, on)`.
+fn installed(ctx: &Context, kind: ModKind) -> Result<Vec<(String, String, bool)>> {
+    let config = ctx.config()?;
+    Ok(ctx
+        .mods()
+        .list(&config)?
+        .into_iter()
+        .filter(|item| item.kind == kind)
+        .map(|item| {
+            let label = match &item.meta {
+                Ok(meta) => format!("{} {}", meta.name, meta.version),
+                Err(_) => tr!(ctx.lang, "{} (refused)", "{} (refusé)", item.id),
+            };
+            (item.id, label, item.active)
+        })
+        .collect())
+}
+
+/// A sub-menu. Returns the picked index, or `None` to go back.
+fn pick(ctx: &Context, title: &str, entries: &[Entry]) -> io::Result<Option<usize>> {
+    let footer = tr!(
+        ctx.lang,
+        "↑↓ move · enter select · esc back",
+        "↑↓ naviguer · entrée valider · échap retour"
+    );
+    let header = vec![format!("  {}", paint(title, |s| s.with(ACCENT).bold()))];
+    menu::select(&header, entries, &footer)
+}
+
+fn choose_theme(ctx: &Context, title: &str) -> io::Result<()> {
+    let lang = ctx.lang;
+    let themes = match installed(ctx, ModKind::Theme) {
+        Ok(themes) => themes,
+        Err(err) => return screen(ctx, title, |_| Err(err)),
+    };
+    let none_active = !themes.iter().any(|(_, _, active)| *active);
+    let mut entries = vec![Entry::section("")];
+    entries.push(Entry::choice(
+        tr!(lang, "None (Spotify's look)", "Aucun (look d'origine)"),
+        active_hint(lang, none_active, ModKind::Theme),
+    ));
+    for (_, label, active) in &themes {
+        entries.push(Entry::choice(
+            label.clone(),
+            active_hint(lang, *active, ModKind::Theme),
+        ));
+    }
+    let Some(picked) = pick(ctx, title, &entries)? else {
+        return Ok(());
+    };
+    let id = match picked {
+        0 => "none".to_owned(),
+        n => themes[n - 1].0.clone(),
+    };
+    screen(ctx, title, |ctx| mod_commands::theme(ctx, &id))
+}
+
+fn toggle_extensions(ctx: &Context, title: &str) -> io::Result<()> {
+    let lang = ctx.lang;
+    loop {
+        let extensions = match installed(ctx, ModKind::Extension) {
+            Ok(extensions) => extensions,
+            Err(err) => return screen(ctx, title, |_| Err(err)),
+        };
+        if extensions.is_empty() {
+            return screen(ctx, title, |_| {
+                ui::hint(tr!(
+                    lang,
+                    "No extension installed yet.",
+                    "Aucune extension installée pour l'instant."
+                ));
+                Ok(())
+            });
+        }
+        let mut entries = vec![Entry::section("")];
+        for (_, label, active) in &extensions {
+            let mark = if *active { "●" } else { "○" };
+            entries.push(Entry::choice(
+                format!("{mark} {label}"),
+                active_hint(lang, *active, ModKind::Extension),
+            ));
+        }
+        let Some(picked) = pick(ctx, title, &entries)? else {
+            return Ok(());
+        };
+        let (id, _, active) = &extensions[picked];
+        let result = if *active {
+            ctx.config().and_then(|mut config| {
+                ctx.mods().disable(&mut config, id)?;
+                ctx.save(&config)
+            })
+        } else {
+            ctx.config().and_then(|mut config| {
+                ctx.mods().enable(&mut config, id)?;
+                ctx.save(&config)
+            })
+        };
+        if let Err(err) = result {
+            screen(ctx, title, |_| Err(err))?;
+        }
+    }
+}
+
+fn uninstall_mod(ctx: &Context, title: &str) -> io::Result<()> {
+    let lang = ctx.lang;
+    let mut all = Vec::new();
+    for kind in [ModKind::Theme, ModKind::Extension] {
+        match installed(ctx, kind) {
+            Ok(list) => all.extend(list.into_iter().map(|(id, label, _)| (kind, id, label))),
+            Err(err) => return screen(ctx, title, |_| Err(err)),
+        }
+    }
+    if all.is_empty() {
+        return screen(ctx, title, |_| {
+            ui::hint(tr!(lang, "Nothing is installed.", "Rien n'est installé."));
+            Ok(())
+        });
+    }
+    let mut entries = vec![Entry::section("")];
+    for (kind, _, label) in &all {
+        entries.push(Entry::choice(label.clone(), kind.label(lang)));
+    }
+    let Some(picked) = pick(ctx, title, &entries)? else {
+        return Ok(());
+    };
+    let (_, id, label) = &all[picked];
+    screen(ctx, title, |ctx| {
+        let question = tr!(lang, "Delete {label}? (y/N)", "Supprimer {label} ? (o/N)");
+        if ui::confirm(&question) {
+            mod_commands::uninstall(ctx, id)
+        } else {
+            Ok(())
+        }
+    })
+}
+
+fn active_hint(lang: Lang, active: bool, kind: ModKind) -> String {
+    match (active, kind) {
+        (false, _) => String::new(),
+        (true, ModKind::Theme) => tr!(lang, "active", "actif"),
+        (true, ModKind::Extension) => tr!(lang, "on", "activée"),
+    }
 }
 
 fn header(ctx: &Context) -> Vec<String> {

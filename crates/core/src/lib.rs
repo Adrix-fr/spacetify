@@ -8,9 +8,11 @@
 pub mod backup;
 pub mod config;
 pub mod detect;
+pub mod doctor;
 pub mod errors;
 pub mod i18n;
 pub mod logs;
+pub mod mods;
 pub mod patcher;
 pub mod spotify;
 
