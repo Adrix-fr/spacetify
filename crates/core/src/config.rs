@@ -62,11 +62,7 @@ pub struct AppDirs {
 impl AppDirs {
     pub fn detect() -> Result<Self> {
         if let Some(home) = std::env::var_os("SPACETIFY_HOME") {
-            let home = PathBuf::from(home);
-            return Ok(Self {
-                config_dir: home.clone(),
-                data_dir: home,
-            });
+            return Ok(Self::in_folder(home));
         }
         Ok(Self {
             config_dir: dirs::config_dir().ok_or(Error::NoUserDirs)?.join(APP_NAME),
@@ -74,6 +70,15 @@ impl AppDirs {
                 .ok_or(Error::NoUserDirs)?
                 .join(APP_NAME),
         })
+    }
+
+    /// Everything in one folder, as with `SPACETIFY_HOME`.
+    pub fn in_folder(home: impl Into<PathBuf>) -> Self {
+        let home = home.into();
+        Self {
+            config_dir: home.clone(),
+            data_dir: home,
+        }
     }
 
     pub fn config_file(&self) -> PathBuf {

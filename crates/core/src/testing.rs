@@ -46,6 +46,27 @@ pub fn write_spa(path: &Path, index_html: &str) {
     zip.finish().unwrap();
 }
 
+/// Writes an extension that relies on `selectors`.
+pub fn write_extension(dir: &Path, id: &str, selectors: &[&str]) {
+    fs::create_dir_all(dir).unwrap();
+    let selectors: Vec<String> = selectors.iter().map(|s| format!("'{s}'")).collect();
+    fs::write(
+        dir.join("extension.toml"),
+        format!(
+            "id = \"{id}\"
+name = \"Ext {id}\"
+version = \"0.1.0\"
+author = \"Me\"
+             spacetify = \">=0.2.0\"
+selectors = [{}]
+",
+            selectors.join(", ")
+        ),
+    )
+    .unwrap();
+    fs::write(dir.join("main.js"), "spacetify.log.info('hi');").unwrap();
+}
+
 pub struct Fixture {
     _dir: TempDir,
     pub install: SpotifyInstall,

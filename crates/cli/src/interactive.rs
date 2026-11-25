@@ -10,8 +10,8 @@ use spacetify_core::{Lang, Result, detect, spotify, tr};
 
 use crate::commands::{self, Context};
 use crate::menu::{self, Entry};
-use crate::mod_commands;
 use crate::ui::{self, ACCENT, paint};
+use crate::{mod_commands, service_commands};
 
 #[derive(Clone, Copy)]
 enum Action {
@@ -27,13 +27,17 @@ enum Action {
     ToggleExtensions,
     UninstallMod,
     Doctor,
+    AutoRepair,
+    ServiceStatus,
+    ServiceEvents,
+    SimulateUpdate,
     Language,
     Quit,
 }
 
 pub fn run(ctx: &mut Context) -> io::Result<()> {
     loop {
-        let items = items(ctx.lang);
+        let items = items(ctx);
         let footer = tr!(
             ctx.lang,
             "↑↓ move · enter select · q quit",
@@ -59,6 +63,18 @@ pub fn run(ctx: &mut Context) -> io::Result<()> {
             Action::ToggleExtensions => toggle_extensions(ctx, title)?,
             Action::UninstallMod => uninstall_mod(ctx, title)?,
             Action::Doctor => screen(ctx, title, mod_commands::doctor)?,
+            Action::AutoRepair => screen(ctx, title, |ctx| {
+                if service_commands::is_on(ctx) {
+                    service_commands::disable(ctx)
+                } else {
+                    service_commands::enable(ctx)
+                }
+            })?,
+            Action::ServiceStatus => screen(ctx, title, service_commands::status)?,
+            Action::ServiceEvents => screen(ctx, title, |ctx| service_commands::events(ctx, 15))?,
+            Action::SimulateUpdate => screen(ctx, title, |ctx| {
+                service_commands::simulate_update(ctx, false)
+            })?,
         }
     }
 }
@@ -101,7 +117,8 @@ impl Items {
     }
 }
 
-fn items(lang: Lang) -> Items {
+fn items(ctx: &Context) -> Items {
+    let lang = ctx.lang;
     let mut items = Items::default();
 
     items.section("Mods");
@@ -192,6 +209,47 @@ fn items(lang: Lang) -> Items {
             "inject without touching any file",
             "injecter sans toucher aux fichiers"
         ),
+    );
+
+    items.section(tr!(lang, "Automatic repair", "Réparation automatique"));
+    let (state, hint) = if service_commands::is_on(ctx) {
+        (
+            tr!(lang, "on", "activée"),
+            tr!(lang, "enter to turn off", "entrée pour désactiver"),
+        )
+    } else {
+        (
+            tr!(lang, "off", "désactivée"),
+            tr!(
+                lang,
+                "puts mods back after Spotify updates",
+                "remet les mods après les mises à jour"
+            ),
+        )
+    };
+    items.choice(
+        Action::AutoRepair,
+        tr!(
+            lang,
+            "Automatic repair: {state}",
+            "Réparation auto : {state}"
+        ),
+        hint,
+    );
+    items.choice(
+        Action::ServiceStatus,
+        tr!(lang, "Service status", "État du service"),
+        "",
+    );
+    items.choice(
+        Action::ServiceEvents,
+        tr!(lang, "Latest events", "Derniers événements"),
+        "",
+    );
+    items.choice(
+        Action::SimulateUpdate,
+        tr!(lang, "Simulate an update", "Simuler une mise à jour"),
+        tr!(lang, "to test the repair", "pour tester la réparation"),
     );
 
     items.section(tr!(lang, "Settings", "Réglages"));

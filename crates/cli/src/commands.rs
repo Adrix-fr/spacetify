@@ -9,11 +9,12 @@ use spacetify_core::config::Config;
 use spacetify_core::detect::{self, UiState};
 use spacetify_core::mods::ModStore;
 use spacetify_core::patcher::{self, ApplyOutcome, BackupOutcome, Payload, RestoreOutcome, live};
+use spacetify_core::service::ServicePaths;
 use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
 use crate::args::Command;
-use crate::{mod_commands, ui};
+use crate::{mod_commands, service_commands, ui};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -23,6 +24,9 @@ pub struct Context {
     pub backups_dir: PathBuf,
     pub config_dir: PathBuf,
     pub config_file: PathBuf,
+    pub service: ServicePaths,
+    /// `--spotify-path`, given on the command line (passed on to the service).
+    pub spotify_path_flag: Option<PathBuf>,
 }
 
 impl Context {
@@ -30,7 +34,7 @@ impl Context {
         spotify::locate(self.spotify_path.as_deref())
     }
 
-    fn store(&self) -> BackupStore {
+    pub fn store(&self) -> BackupStore {
         BackupStore::new(&self.backups_dir)
     }
 
@@ -61,6 +65,7 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Disable { id } => mod_commands::disable(ctx, &id),
         Command::Theme { id } => mod_commands::theme(ctx, &id),
         Command::Doctor => mod_commands::doctor(ctx),
+        Command::Service { action } => service_commands::run(ctx, action),
     }
 }
 
@@ -318,7 +323,7 @@ pub fn state_label(lang: Lang, state: &UiState) -> String {
 }
 
 /// Returns whether Spotify was closed, so the caller can start it again.
-fn close_if_running(lang: Lang, yes: bool) -> Result<bool> {
+pub fn close_if_running(lang: Lang, yes: bool) -> Result<bool> {
     if !spotify::is_running()? {
         return Ok(false);
     }
@@ -335,7 +340,7 @@ fn close_if_running(lang: Lang, yes: bool) -> Result<bool> {
     Ok(true)
 }
 
-fn restart(lang: Lang, install: &SpotifyInstall) {
+pub fn restart(lang: Lang, install: &SpotifyInstall) {
     match spotify::launch(install, &[]) {
         Ok(_) => ui::success(tr!(lang, "Spotify restarted.", "Spotify relancé.")),
         Err(err) => ui::error(err.localized(lang)),

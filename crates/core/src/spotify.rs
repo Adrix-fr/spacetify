@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use sysinfo::{ProcessesToUpdate, System};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 use crate::{Error, Result};
 
@@ -249,6 +249,27 @@ pub fn is_running() -> Result<bool> {
     Ok(spotify_pids(&processes()?).next().is_some())
 }
 
+/// Name of a running Spotify, or of a Spotify updater or installer, if any.
+/// While one runs, Spotify's files may change at any moment.
+pub fn busy() -> Result<Option<String>> {
+    Ok(processes()?
+        .processes()
+        .values()
+        .map(|process| process.name().to_string_lossy().into_owned())
+        .find(|name| is_spotify_or_updater(name)))
+}
+
+/// `Spotify.exe`, `spotify`, and Spotify's update and setup programs.
+pub fn is_spotify_or_updater(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+    stem == "spotify"
+        || (stem.starts_with("spotify")
+            && ["update", "setup", "install", "migrat"]
+                .iter()
+                .any(|word| stem.contains(word)))
+}
+
 /// Closes every Spotify process and waits for them to exit.
 pub fn close(timeout: Duration) -> Result<()> {
     let system = processes()?;
@@ -288,7 +309,8 @@ pub fn launch(install: &SpotifyInstall, args: &[String]) -> Result<Child> {
 
 fn processes() -> Result<System> {
     let mut system = System::new().map_err(|err| Error::Processes(err.to_string()))?;
-    system.refresh_processes(ProcessesToUpdate::All, true);
+    // Names only: much cheaper than the default, which also reads CPU and memory use.
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     Ok(system)
 }
 
@@ -337,6 +359,23 @@ mod tests {
         let plist = "<dict>\n<key>CFBundleName</key>\n<string>Spotify</string>\n\
                      <key>CFBundleShortVersionString</key>\n<string>1.2.48.405</string>\n</dict>";
         assert_eq!(parse_plist_version(plist).as_deref(), Some("1.2.48.405"));
+    }
+
+    #[test]
+    fn recognises_spotify_and_its_updater() {
+        for name in [
+            "Spotify.exe",
+            "spotify",
+            "SpotifyUpdate.exe",
+            "SpotifySetup.exe",
+            "SpotifyFullSetup.exe",
+            "SpotifyMigrator.exe",
+        ] {
+            assert!(is_spotify_or_updater(name), "{name}");
+        }
+        for name in ["spacetify-service.exe", "SpotifyWidget.exe", "notepad.exe"] {
+            assert!(!is_spotify_or_updater(name), "{name}");
+        }
     }
 
     #[test]

@@ -102,6 +102,36 @@ pub enum Error {
     #[error("{0} problem(s) found with your mods for this version of Spotify. Details are above.")]
     Incompatible(usize),
 
+    #[error("Another spacetify operation is in progress. Try again in a moment.")]
+    Busy,
+
+    #[error(
+        "Spotify has no mods applied, so there is no update to simulate. Run `spacetify apply` first."
+    )]
+    NotPatched,
+
+    #[error(
+        "The background service is not running, so nothing would repair Spotify. Run `spacetify service enable` first."
+    )]
+    ServiceNotRunning,
+
+    #[error(
+        "The background service program was not found at {}. Install it next to spacetify with `cargo install --path crates/service`.", .0.display()
+    )]
+    ServiceMissing(PathBuf),
+
+    #[error("Could not start the background service: {0}")]
+    ServiceStart(String),
+
+    #[error("The background service stopped right away. Its log may say why: {}", .0.display())]
+    ServiceFailed(PathBuf),
+
+    #[error("The background service did not stop. Close `spacetify-service` in the Task Manager.")]
+    ServiceStop,
+
+    #[error("Could not change the start with the computer: {0}")]
+    Autostart(String),
+
     #[error("File error on {}: {source}", .path.display())]
     Io {
         path: PathBuf,
@@ -152,6 +182,14 @@ impl Error {
             Self::IdTaken { id, kind } => format!("L'identifiant `{id}` est déjà pris par un(e) {} installé(e). Chaque identifiant doit être unique.", kind.label(Lang::Fr)),
             Self::InstallFromStore(path) => format!("{} est déjà dans le dossier des mods de spacetify. Installe plutôt depuis ta propre copie du mod.", path.display()),
             Self::Incompatible(count) => format!("{count} problème(s) trouvé(s) avec tes mods pour cette version de Spotify. Le détail est au-dessus."),
+            Self::Busy => "Une autre opération de spacetify est en cours. Réessaie dans un instant.".into(),
+            Self::NotPatched => "Spotify n'a pas de mods appliqués, il n'y a donc pas de mise à jour à simuler. Lance d'abord `spacetify apply`.".into(),
+            Self::ServiceNotRunning => "Le service en arrière-plan ne tourne pas, donc rien ne réparerait Spotify. Lance d'abord `spacetify service enable`.".into(),
+            Self::ServiceMissing(path) => format!("Le programme du service est introuvable : {}. Installe-le à côté de spacetify avec `cargo install --path crates/service`.", path.display()),
+            Self::ServiceStart(reason) => format!("Impossible de démarrer le service en arrière-plan : {reason}"),
+            Self::ServiceFailed(log) => format!("Le service en arrière-plan s'est arrêté aussitôt. Son journal dit peut-être pourquoi : {}", log.display()),
+            Self::ServiceStop => "Le service en arrière-plan ne s'est pas arrêté. Ferme `spacetify-service` dans le Gestionnaire des tâches.".into(),
+            Self::Autostart(reason) => format!("Impossible de modifier le démarrage avec l'ordinateur : {reason}"),
             Self::Io { path, source } => format!("Erreur de fichier sur {} : {source}", path.display()),
         }
     }

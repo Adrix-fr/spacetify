@@ -1,0 +1,22 @@
+[package]
+name = "spacetify-service"
+description = "Background service of spacetify: re-applies mods after a Spotify update."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "spacetify-service"
+path = "src/main.rs"
+
+[dependencies]
+spacetify-core.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+embed-resource.workspace = true
+
+[lints]
+workspace = true

@@ -30,7 +30,10 @@ pub use theme::Theme;
 use crate::config::Config;
 use crate::{Error, Lang, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum ModKind {
     Theme,
     Extension,

@@ -17,5 +17,8 @@ clap.workspace = true
 crossterm.workspace = true
 tracing.workspace = true
 
+[build-dependencies]
+embed-resource.workspace = true
+
 [lints]
 workspace = true

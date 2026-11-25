@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cli"]
+members = ["crates/core", "crates/cli", "crates/service"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0-or-later"
@@ -15,19 +15,23 @@ spacetify-core = { path = "crates/core" }
 clap = { version = "4.6", features = ["derive"] }
 crossterm = "0.29"
 dirs = "7"
+embed-resource = "3"
 humantime = "2.4"
+notify = "9"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
 sys-locale = "0.3"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+tauri-winrt-notification = "0.8"
 tempfile = "3"
 thiserror = "2"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+winreg = "0.56"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [workspace.lints.rust]

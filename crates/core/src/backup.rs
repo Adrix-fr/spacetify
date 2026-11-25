@@ -12,10 +12,11 @@
 //!
 //! A backup is trusted only while its hash still matches `backup.toml`.
 
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -25,6 +26,7 @@ use crate::{APP_NAME, Error, Result};
 const SPA_FILE: &str = "xpui.spa";
 const RECORD_FILE: &str = "backup.toml";
 const APPLIED_FILE: &str = "applied.toml";
+const LOCK_FILE: &str = "operation.lock";
 
 /// Describes one backed up `xpui.spa`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,6 +157,50 @@ impl BackupStore {
 
     fn entry_dir(&self, sha256: &str) -> PathBuf {
         self.root.join(&sha256[..sha256.len().min(16)])
+    }
+}
+
+/// Held while Spotify's interface is being written, so the CLI and the
+/// service never write it at the same time. Released when dropped, or by the
+/// system if the process dies.
+#[derive(Debug)]
+pub struct OperationLock {
+    _file: File,
+}
+
+impl OperationLock {
+    /// Waits a few seconds for another operation to finish, then gives up
+    /// with [`Error::Busy`].
+    pub fn acquire(dir: &Path) -> Result<Self> {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(file) = try_lock_file(&dir.join(LOCK_FILE))? {
+                return Ok(Self { _file: file });
+            }
+            if Instant::now() > deadline {
+                return Err(Error::Busy);
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+/// Opens `path` (creating it and its folder) and locks it. `None` if
+/// another handle holds the lock.
+pub(crate) fn try_lock_file(path: &Path) -> Result<Option<File>> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(Error::io(parent))?;
+    }
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .map_err(Error::io(path))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(err)) => Err(Error::io(path)(err)),
     }
 }
 
@@ -312,6 +358,23 @@ mod tests {
         let (_, created) = store.create(&spa, None).unwrap();
         assert!(created);
         store.verify(&record).unwrap();
+    }
+
+    #[test]
+    fn operation_lock_is_exclusive() {
+        let dir = tempfile::tempdir().unwrap();
+        let lock = OperationLock::acquire(dir.path()).unwrap();
+        assert!(
+            try_lock_file(&dir.path().join(LOCK_FILE))
+                .unwrap()
+                .is_none()
+        );
+        drop(lock);
+        assert!(
+            try_lock_file(&dir.path().join(LOCK_FILE))
+                .unwrap()
+                .is_some()
+        );
     }
 
     #[test]

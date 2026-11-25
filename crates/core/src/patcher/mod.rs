@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
-use crate::backup::{self, AppliedState, BackupRecord, BackupStore};
+use crate::backup::{self, AppliedState, BackupRecord, BackupStore, OperationLock};
 use crate::detect::{self, UiState};
 use crate::spotify::{self, SpotifyInstall};
 use crate::{Error, Result};
@@ -98,14 +98,49 @@ pub fn apply(
     store: &BackupStore,
     payload: &Payload,
 ) -> Result<ApplyOutcome> {
+    let _lock = OperationLock::acquire(store.root())?;
     ensure_closed()?;
     apply_unchecked(install, store, payload)
 }
 
 /// Puts back the original interface. Refuses while Spotify is running.
+///
+/// Also forgets that mods were applied, so the background service does not
+/// put them back.
 pub fn restore(install: &SpotifyInstall, store: &BackupStore) -> Result<RestoreOutcome> {
+    let _lock = OperationLock::acquire(store.root())?;
     ensure_closed()?;
     restore_unchecked(install, store)
+}
+
+/// Does to the interface what a Spotify update does: puts the original file
+/// back, but keeps the record that mods were applied. Used to test the
+/// automatic repair on a real install. Returns the hash of the original.
+pub fn simulate_update(install: &SpotifyInstall, store: &BackupStore) -> Result<String> {
+    let _lock = OperationLock::acquire(store.root())?;
+    ensure_closed()?;
+    simulate_update_unchecked(install, store)
+}
+
+pub(crate) fn simulate_update_unchecked(
+    install: &SpotifyInstall,
+    store: &BackupStore,
+) -> Result<String> {
+    install.ensure_modifiable()?;
+    match detect::inspect(install)?.state {
+        UiState::Patched(marker) => {
+            let original = original_backup(store, &marker)?;
+            backup::copy_verified(
+                &store.file_for(&original),
+                &install.xpui_spa(),
+                &original.sha256,
+            )?;
+            tracing::info!("simulated an update of {}", install.xpui_spa().display());
+            Ok(original.sha256)
+        }
+        UiState::Original => Err(Error::NotPatched),
+        other => Err(refusal(install, other)),
+    }
 }
 
 pub(crate) fn apply_unchecked(
@@ -165,7 +200,10 @@ pub(crate) fn restore_unchecked(
             })
         }
         // Never "restore" over an original file: after an update it would downgrade Spotify.
-        UiState::Original => Ok(RestoreOutcome::AlreadyOriginal),
+        UiState::Original => {
+            store.clear_applied()?;
+            Ok(RestoreOutcome::AlreadyOriginal)
+        }
         other => Err(refusal(install, other)),
     }
 }
@@ -272,7 +310,7 @@ fn ensure_closed() -> Result<()> {
     }
 }
 
-fn refusal(install: &SpotifyInstall, state: UiState) -> Error {
+pub(crate) fn refusal(install: &SpotifyInstall, state: UiState) -> Error {
     match state {
         UiState::Spicetify => Error::SpicetifyActive,
         UiState::Missing => Error::XpuiMissing(install.xpui_spa()),

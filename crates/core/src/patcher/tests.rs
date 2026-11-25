@@ -158,6 +158,42 @@ fn restore_never_downgrades_after_a_spotify_update() {
 }
 
 #[test]
+fn restoring_after_an_update_forgets_the_mods() {
+    let fx = Fixture::new();
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
+    write_spa(
+        &fx.install.xpui_spa(),
+        &ORIGINAL_INDEX.replace("Spotify", "Spotify 2"),
+    );
+    assert!(fx.store.load_applied().unwrap().is_some());
+
+    // The user asked for the original: the service must not put mods back.
+    restore_unchecked(&fx.install, &fx.store).unwrap();
+    assert!(fx.store.load_applied().unwrap().is_none());
+}
+
+#[test]
+fn simulated_update_puts_the_original_back_and_keeps_the_record() {
+    let fx = Fixture::new();
+    let original_bytes = fs::read(fx.install.xpui_spa()).unwrap();
+    assert!(matches!(
+        simulate_update_unchecked(&fx.install, &fx.store),
+        Err(Error::NotPatched)
+    ));
+
+    apply_unchecked(&fx.install, &fx.store, &empty()).unwrap();
+    let sha256 = simulate_update_unchecked(&fx.install, &fx.store).unwrap();
+
+    assert_eq!(fx.spa_sha(), sha256);
+    assert_eq!(fs::read(fx.install.xpui_spa()).unwrap(), original_bytes);
+    assert_eq!(
+        detect::inspect(&fx.install).unwrap().state,
+        UiState::Original
+    );
+    assert!(fx.store.load_applied().unwrap().is_some());
+}
+
+#[test]
 fn refuses_to_touch_spicetify() {
     let fx = Fixture::new();
     let html = ORIGINAL_INDEX.replace(

@@ -2,8 +2,8 @@
 //!
 //! Everything that touches Spotify lives here: finding the install, backing up
 //! its interface, detecting changes made by other tools and injecting mods.
-//! The CLI is a thin layer on top, and so will be the desktop app and the
-//! background service.
+//! The CLI and the background service are thin layers on top, and so will
+//! be the desktop app.
 
 pub mod backup;
 pub mod config;
@@ -14,6 +14,7 @@ pub mod i18n;
 pub mod logs;
 pub mod mods;
 pub mod patcher;
+pub mod service;
 pub mod spotify;
 
 #[cfg(test)]

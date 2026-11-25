@@ -8,11 +8,13 @@ mod commands;
 mod interactive;
 mod menu;
 mod mod_commands;
+mod service_commands;
 mod ui;
 
 use std::process::ExitCode;
 
 use spacetify_core::config::{AppDirs, Config};
+use spacetify_core::service::ServicePaths;
 use spacetify_core::{Lang, Result, logs};
 
 use args::Cli;
@@ -57,6 +59,8 @@ fn context(cli: &Cli) -> Result<Context> {
         backups_dir: dirs.backups_dir(),
         config_file: dirs.config_file(),
         config_dir: dirs.config_dir.clone(),
+        service: ServicePaths::new(&dirs),
+        spotify_path_flag: cli.spotify_path.clone(),
     })
 }
 

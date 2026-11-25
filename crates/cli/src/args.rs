@@ -71,6 +71,33 @@ pub enum Command {
     },
     /// Check that the active mods still match this version of Spotify
     Doctor,
+    /// Automatic repair after Spotify updates (background service)
+    Service {
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ServiceAction {
+    /// Turn on automatic repair: start the service now and at every login
+    Enable,
+    /// Turn off automatic repair: stop the service and remove it from startup
+    Disable,
+    /// Start the service now, without changing what happens at login
+    Start,
+    /// Stop the service now, without changing what happens at login
+    Stop,
+    /// Show whether the service runs and what it is doing
+    Status,
+    /// Show what the service did lately
+    Events {
+        /// How many events to show
+        #[arg(short = 'n', long, default_value_t = 15, value_name = "N")]
+        count: usize,
+    },
+    /// Put Spotify's original interface back, as an update does, to test the repair
+    SimulateUpdate(CloseArgs),
 }
 
 #[derive(Debug, Args)]
@@ -179,6 +206,32 @@ fn in_french(command: clap::Command) -> clap::Command {
         .mut_subcommand("doctor", |c| {
             c.about("Vérifier que les mods actifs correspondent encore à cette version de Spotify")
         })
+        .mut_subcommand("service", |c| {
+            c.about("Réparation automatique après les mises à jour de Spotify (service en arrière-plan)")
+                .mut_subcommand("enable", |c| {
+                    c.about("Activer la réparation automatique : lancer le service maintenant et à chaque démarrage")
+                })
+                .mut_subcommand("disable", |c| {
+                    c.about("Désactiver la réparation automatique : arrêter le service et le retirer du démarrage")
+                })
+                .mut_subcommand("start", |c| {
+                    c.about("Lancer le service maintenant, sans changer le démarrage")
+                })
+                .mut_subcommand("stop", |c| {
+                    c.about("Arrêter le service maintenant, sans changer le démarrage")
+                })
+                .mut_subcommand("status", |c| {
+                    c.about("Afficher si le service tourne et ce qu'il fait")
+                })
+                .mut_subcommand("events", |c| {
+                    c.about("Afficher ce que le service a fait récemment")
+                        .mut_arg("count", |a| a.help("Nombre d'événements à afficher"))
+                })
+                .mut_subcommand("simulate-update", |c| {
+                    c.about("Remettre l'interface d'origine de Spotify, comme une mise à jour, pour tester la réparation")
+                        .mut_arg("yes", |a| a.help(YES))
+                })
+        })
 }
 
 #[cfg(test)]
@@ -204,6 +257,14 @@ mod tests {
         assert!(
             matches!(cli.command, Some(Command::Install { path }) if path.as_os_str() == "my theme")
         );
+        let cli = Cli::try_parse_from(["spacetify", "service", "events", "-n", "3"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Service {
+                action: ServiceAction::Events { count: 3 }
+            })
+        ));
+        assert!(Cli::try_parse_from(["spacetify", "service", "simulate-update", "--yes"]).is_ok());
         let cli = Cli::try_parse_from(["spacetify", "ls"]).unwrap();
         assert!(matches!(cli.command, Some(Command::List)));
         assert!(Cli::try_parse_from(["spacetify", "theme"]).is_err());
