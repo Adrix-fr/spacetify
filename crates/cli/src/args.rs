@@ -76,6 +76,11 @@ pub enum Command {
         #[command(subcommand)]
         action: ServiceAction,
     },
+    /// Check a mod before sending it to the gallery, and the robot's steps
+    Gallery {
+        #[command(subcommand)]
+        action: GalleryAction,
+    },
     /// Run by the Windows installer of the desktop app
     #[command(hide = true)]
     Installer {
@@ -112,6 +117,79 @@ pub enum ServiceAction {
     },
     /// Put Spotify's original interface back, as an update does, to test the repair
     SimulateUpdate(CloseArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum GalleryAction {
+    /// Look for anything hidden or risky in a mod, as the gallery's robot does
+    Review {
+        /// Folder of the mod
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+        /// Copy of the repository, to compare with the version in the gallery
+        #[arg(long, value_name = "DIR")]
+        repo: Option<PathBuf>,
+        /// Output of `clamscan` on the mod's folder
+        #[arg(long, value_name = "FILE")]
+        antivirus: Option<PathBuf>,
+        /// Write the report as JSON
+        #[arg(long, value_name = "FILE")]
+        json: Option<PathBuf>,
+        /// Write the report for a GitHub comment
+        #[arg(long, value_name = "FILE")]
+        markdown: Option<PathBuf>,
+        /// Where the files can be read, for links to each line ({id} is replaced)
+        #[arg(long, value_name = "URL")]
+        link_base: Option<String>,
+    },
+    /// Check a mod and put it in a .zip, ready for the request form
+    Pack {
+        /// Folder of the mod
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+        /// Where to put the .zip (the current folder by default)
+        #[arg(long, value_name = "DIR")]
+        into: Option<PathBuf>,
+    },
+    /// Robot: read a request made with the form
+    #[command(hide = true)]
+    Form {
+        /// The request's text
+        #[arg(value_name = "FILE")]
+        body: PathBuf,
+        #[arg(long, value_name = "FILE")]
+        json: Option<PathBuf>,
+    },
+    /// Robot: open a .zip safely
+    #[command(hide = true)]
+    Unpack {
+        #[arg(value_name = "ZIP")]
+        archive: PathBuf,
+        #[arg(value_name = "DIR")]
+        into: PathBuf,
+        /// Folder of the mod inside the .zip
+        #[arg(long, value_name = "PATH")]
+        folder: Option<String>,
+        #[arg(long, value_name = "FILE")]
+        json: Option<PathBuf>,
+    },
+    /// Robot: put an accepted mod into the gallery's list
+    #[command(hide = true)]
+    Add {
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+        /// Copy of the repository
+        #[arg(long, value_name = "DIR")]
+        repo: PathBuf,
+        /// GitHub account of the author
+        #[arg(long, value_name = "LOGIN")]
+        owner: String,
+        /// The request's text
+        #[arg(long, value_name = "FILE")]
+        form: PathBuf,
+        #[arg(long, value_name = "FILE")]
+        json: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -246,6 +324,33 @@ fn in_french(command: clap::Command) -> clap::Command {
                         .mut_arg("yes", |a| a.help(YES))
                 })
         })
+        .mut_subcommand("gallery", |c| {
+            c.about("Vérifier un mod avant de l'envoyer à la galerie, et les étapes du robot")
+                .mut_subcommand("review", |c| {
+                    c.about("Chercher tout ce qui est caché ou risqué dans un mod, comme le robot de la galerie")
+                        .mut_arg("path", |a| a.help("Dossier du mod"))
+                        .mut_arg("repo", |a| {
+                            a.help("Copie du dépôt, pour comparer avec la version de la galerie")
+                        })
+                        .mut_arg("antivirus", |a| {
+                            a.help("Résultat de `clamscan` sur le dossier du mod")
+                        })
+                        .mut_arg("json", |a| a.help("Écrire le rapport en JSON"))
+                        .mut_arg("markdown", |a| {
+                            a.help("Écrire le rapport pour un commentaire GitHub")
+                        })
+                        .mut_arg("link_base", |a| {
+                            a.help("Où lire les fichiers, pour un lien vers chaque ligne ({id} est remplacé)")
+                        })
+                })
+                .mut_subcommand("pack", |c| {
+                    c.about("Vérifier un mod et le mettre dans un .zip, prêt pour le formulaire de demande")
+                        .mut_arg("path", |a| a.help("Dossier du mod"))
+                        .mut_arg("into", |a| {
+                            a.help("Où mettre le .zip (le dossier courant par défaut)")
+                        })
+                })
+        })
 }
 
 #[cfg(test)]
@@ -279,6 +384,14 @@ mod tests {
             })
         ));
         assert!(Cli::try_parse_from(["spacetify", "service", "simulate-update", "--yes"]).is_ok());
+        let cli = Cli::try_parse_from(["spacetify", "gallery", "review", "m", "--json", "r.json"])
+            .unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Gallery {
+                action: GalleryAction::Review { json: Some(_), .. }
+            })
+        ));
         let cli = Cli::try_parse_from(["spacetify", "ls"]).unwrap();
         assert!(matches!(cli.command, Some(Command::List)));
         assert!(Cli::try_parse_from(["spacetify", "theme"]).is_err());

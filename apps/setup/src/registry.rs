@@ -9,7 +9,7 @@ use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
 const UNINSTALL: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\spacetify";
 /// Left by the first installer (made by Tauri's NSIS bundler).
 const OLD_INSTALLER: &str = r"Software\Adrix-fr (spacetify project)";
-const PUBLISHER: &str = "Adrix-fr (spacetify project)";
+const PUBLISHER: &str = "spacetify team";
 const HOMEPAGE: &str = "https://github.com/Adrix-fr/spacetify";
 
 /// An installed copy, as Windows knows it.

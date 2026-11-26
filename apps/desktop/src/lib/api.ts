@@ -146,6 +146,36 @@ export interface SettingsView {
   dataDir: string;
 }
 
+export type InGallery = "no" | "same" | "older" | "newer";
+
+export interface Candidate {
+  folder: string;
+  id: string;
+  name: string;
+  kind: "theme" | "extension";
+  version: string;
+  palette: Palette | null;
+  inGallery: InGallery;
+}
+
+export type CheckLevel = "ok" | "look" | "block";
+
+export interface ReviewView {
+  candidate: Candidate | null;
+  inGallery: InGallery;
+  galleryVersion: string | null;
+  checks: {
+    title: string;
+    level: CheckLevel;
+    clean: string | null;
+    findings: { what: string; place: string | null; excerpt: string | null; level: CheckLevel }[];
+  }[];
+  summary: string;
+  blocking: number;
+  toLookAt: number;
+  size: number;
+}
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
   apply: (closeSpotify: boolean) => invoke<Done>("apply", { closeSpotify }),
@@ -168,6 +198,11 @@ export const api = {
   setLanguage: (language: string) => invoke<void>("set_language", { language }),
   runCli: (line: string) => invoke<void>("run_cli", { line }),
   stopCli: () => invoke<void>("stop_cli"),
+  takeStartPage: () => invoke<string | null>("take_start_page"),
+  submitCandidates: () => invoke<Candidate[]>("submit_candidates"),
+  submitReview: (folder: string) => invoke<ReviewView>("submit_review", { folder }),
+  submitPrepare: (folder: string) =>
+    invoke<{ zip: string; formUrl: string }>("submit_prepare", { folder }),
 };
 
 export const events = {
@@ -177,6 +212,8 @@ export const events = {
     listen<"apply" | "restore">("tray-action", (e) => handler(e.payload)),
   terminalLine: (handler: (line: { stream: "out" | "err"; text: string }) => void) =>
     listen<{ stream: "out" | "err"; text: string }>("terminal-line", (e) => handler(e.payload)),
+  openPage: (handler: (page: string) => void): Promise<UnlistenFn> =>
+    listen<string>("open-page", (e) => handler(e.payload)),
   terminalExit: (handler: (exit: { code: number | null }) => void) =>
     listen<{ code: number | null }>("terminal-exit", (e) => handler(e.payload)),
 };

@@ -10,7 +10,7 @@ export const app = $state({
   page: "home" as Page,
 });
 
-export type Page = "home" | "themes" | "extensions" | "compat" | "repair" | "terminal" | "settings";
+export type Page = "home" | "themes" | "extensions" | "compat" | "repair" | "submit" | "terminal" | "settings";
 
 /** English or French, like `tr!` on the Rust side. */
 export function tr(en: string, fr: string): string {

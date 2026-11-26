@@ -137,8 +137,38 @@ The page needs the background service (see below), which does the work:
 
 Set `SPACETIFY_GALLERY` to a folder (a copy of this repository) or to a base
 URL to try another list, for example before publishing a change to it.
-Accepting mods sent by other people is planned, see
-[docs/roadmap.md](docs/roadmap.md).
+
+### Submitting a mod to the gallery
+
+Anyone can send a theme or an extension. In the app, open **Submit** (the
+gallery's *Submit a mod* button leads there too), pick your mod and click
+*Prepare the request*:
+
+1. the app runs the gallery's checks on your computer, puts the mod in a
+   `.zip` in your Downloads folder and opens GitHub's request form in your
+   browser, already filled in (you need a free GitHub account; spacetify
+   itself sends nothing over the internet);
+2. you drop the `.zip` into the form and send it;
+3. a robot (GitHub Actions) checks the mod again, with the ClamAV antivirus,
+   and answers on the request with a security report;
+4. a maintainer accepts or refuses it. You get GitHub's notification either
+   way, with the reason if it is refused. An accepted mod shows in everyone's
+   gallery within a few minutes.
+
+Without the app: `spacetify gallery pack <folder>` makes the `.zip` and
+prints the form's link; `spacetify gallery review <folder>` shows the
+security report.
+
+**What the robot checks.** It only reads the files, it never runs them:
+that the mod is valid; that each file is what its name says and only allowed
+files are there (no program, archive, hidden file or link); known viruses
+(ClamAV); invisible characters and characters that reverse text; scrambled
+code and code that builds code; every web address the mod contacts; access to
+the Spotify account, cookies, storage, clipboard or keyboard; scripts hidden
+in pictures; and for an update, what changed since the accepted version.
+Anything *blocking* stops the request until it is fixed; anything *to look
+at* is decided by a maintainer, who gets a link to each line. No automatic
+check can prove code is safe: the report shows what a person must read.
 
 Making your own: see [docs/themes.md](docs/themes.md) and
 [docs/extensions.md](docs/extensions.md). Spicetify themes and extensions do
@@ -266,7 +296,8 @@ crates/
     src/mods/         themes and extensions: manifests, checks, install
     src/doctor.rs     compatibility checks against the installed Spotify
     src/service/      automatic repair: main loop, autostart, events, notifications
-    src/gallery/      the gallery: official list, checked downloads, local server
+    src/gallery/      the gallery: official list, checked downloads, local server,
+                      submissions (submission.rs) and their security review (review.rs)
     src/setup.rs      what the Windows installer sets up (Path, notification name)
     src/config.rs     config.toml and app folders
     assets/runtime.js the code injected into Spotify that runs extensions
@@ -279,7 +310,9 @@ apps/
   setup/     the Windows installer and uninstaller (Rust side)
 docs/        guides for theme and extension authors, and the roadmap
 examples/    an example theme and an example extension
-gallery/     the gallery's official list (index.json)
+gallery/     the gallery's official list (index.json), who owns each mod
+             (owners.json) and the accepted mods (mods/)
+.github/     CI, the request form and the gallery's robot (workflows/gallery-*.yml)
 ```
 
 ## Development
@@ -305,10 +338,10 @@ Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 2. ~~Themes and extensions that rely on stable selectors and CSS variables~~
 3. ~~Background service that re-applies mods after a Spotify update~~
 4. ~~Desktop app (Tauri) with its own Windows installer~~
-5. A gallery inside Spotify: browse, install and turn on themes and
-   extensions without leaving Spotify (in progress)
-6. Anyone can submit a theme or an extension to the gallery; each request
-   is accepted or refused by the repository's owner (later)
+5. ~~A gallery inside Spotify: browse, install and turn on themes and
+   extensions without leaving Spotify~~
+6. Anyone can submit a theme or an extension to the gallery; a robot checks
+   it and the maintainers accept or refuse each request (in progress)
 
 Phases 5 and 6 are detailed in [docs/roadmap.md](docs/roadmap.md).
 
@@ -329,6 +362,8 @@ software. To keep that rare, spacetify:
   text files (CSS, JavaScript, TOML, images) that run inside Spotify like a
   web page, from this repository's official list only, when you click
   *Install*, each one checked against the SHA-256 written in the list;
+- never uploads anything: to submit a mod, the app makes a `.zip` and opens
+  GitHub's form in your browser, where you send it yourself;
 - installs for the current user only, with its own small installer
   (`apps/setup`) that writes nothing but what is listed under *Where files
   go*. Like most uninstallers, `uninstall.exe` runs a copy of itself from the

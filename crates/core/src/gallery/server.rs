@@ -12,6 +12,7 @@
 //! POST /v1/enable      {"id"}
 //! POST /v1/disable     {"id"}
 //! POST /v1/restart     close Spotify, apply the changes, open it again
+//! POST /v1/open-submit open the desktop app on its "Submit" page
 //! ```
 //!
 //! Changes are written to `config.toml` at once. Spotify's own file can only
@@ -232,6 +233,7 @@ fn route(request: &HttpRequest, state: &State) -> Reply {
         ("POST", "/v1/restart") => Some(
             service::send(&ServicePaths::new(&state.dirs), Request::ApplyNow).map(|()| json!({})),
         ),
+        ("POST", "/v1/open-submit") => Some(open_submit()),
         _ => return Reply::refused(404),
     };
     match result {
@@ -242,6 +244,30 @@ fn route(request: &HttpRequest, state: &State) -> Reply {
         }
         Some(Err(err)) => Reply::error(500, Text::of_error(&err)),
     }
+}
+
+/// Opens the desktop app, installed next to the service, on its "Submit"
+/// page. If it is open already, it goes to that page.
+fn open_submit() -> Result<Json> {
+    let missing = || {
+        Error::Submission(Text::new(
+            "The spacetify app was not found. Open it by hand, then go to Submit.",
+            "L'appli spacetify est introuvable. Ouvre-la à la main, puis va sur Proposer.",
+        ))
+    };
+    let exe = std::env::current_exe().map_err(|_| missing())?;
+    let app = exe
+        .parent()
+        .ok_or_else(missing)?
+        .join(format!("spacetify-app{}", std::env::consts::EXE_SUFFIX));
+    if !app.is_file() {
+        return Err(missing());
+    }
+    std::process::Command::new(&app)
+        .args(["--page", "submit"])
+        .spawn()
+        .map_err(|_| missing())?;
+    Ok(json!({}))
 }
 
 /// `None` if the request may go on.

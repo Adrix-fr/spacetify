@@ -15,7 +15,7 @@ use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
 use crate::args::{Command, InstallerStep};
-use crate::{mod_commands, service_commands, ui};
+use crate::{gallery_commands, mod_commands, service_commands, ui};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -67,6 +67,7 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Theme { id } => mod_commands::theme(ctx, &id),
         Command::Doctor => mod_commands::doctor(ctx),
         Command::Service { action } => service_commands::run(ctx, action),
+        Command::Gallery { action } => gallery_commands::run(ctx, action),
         Command::Installer { step } => installer(ctx, step),
     }
 }

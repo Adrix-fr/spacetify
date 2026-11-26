@@ -27,7 +27,7 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName", "Adrix-fr (spacetify project)"
+      VALUE "CompanyName", "spacetify team"
       VALUE "FileDescription", "{description}"
       VALUE "FileVersion", "{version}"
       VALUE "InternalName", "{file_name}"

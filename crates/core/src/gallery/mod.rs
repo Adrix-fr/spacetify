@@ -18,7 +18,9 @@
 //! this: see [`server`].
 
 mod link;
+pub mod review;
 pub mod server;
+pub mod submission;
 
 use std::collections::BTreeMap;
 use std::fs;

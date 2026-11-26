@@ -3,6 +3,6 @@
 id = "midnight"
 name = "Midnight"
 version = "1.0.0"
-author = "Adrix-fr"
+author = "spacetify"
 description = "Deep blue backgrounds with a violet accent."
 spacetify = ">=0.2.0"

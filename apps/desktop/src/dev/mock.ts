@@ -74,10 +74,10 @@ export function installMock() {
         return { service, events: events.slice(0, (args as { count?: number }).count ?? 30), log: "C:\\Users\\moi\\AppData\\Local\\spacetify\\service\\service.log" };
       case "list_mods":
         return {
-          themes: [{ id: "midnight", name: "Midnight", version: "1.0.0", author: "Adrix-fr", description: "Deep blue backgrounds with a violet accent.", active: true, error: null, palette: midnight, settings: [] }],
+          themes: [{ id: "midnight", name: "Midnight", version: "1.0.0", author: "spacetify", description: "Deep blue backgrounds with a violet accent.", active: true, error: null, palette: midnight, settings: [] }],
           extensions: [
             {
-              id: "hello-badge", name: "Hello badge", version: "1.0.0", author: "Adrix-fr", description: "Shows a small badge above the player bar.", active: extOn, error: null, palette: null,
+              id: "hello-badge", name: "Hello badge", version: "1.0.0", author: "spacetify", description: "Shows a small badge above the player bar.", active: extOn, error: null, palette: null,
               settings: [
                 { name: "side", label: "Side of the window", kind: "choice", value: "right", default: "right", choices: ["left", "right"], custom: false },
                 { name: "text", label: "Badge text", kind: "string", value: "spacetify ✓", default: "spacetify ✓", choices: [], custom: false },
@@ -97,6 +97,44 @@ export function installMock() {
       case "restore":
         return { message: "Spotify est revenu à son état d'origine (empreinte vérifiée).", detail: null };
       case "run_cli":
+        return null;
+      case "submit_candidates":
+        return [
+          { folder: "C:\\Users\\moi\\mods\\aurora", id: "aurora", name: "Aurora", kind: "theme", version: "1.0.0", palette: midnight, inGallery: "no" },
+          { folder: "C:\\Users\\moi\\mods\\lyrics", id: "lyrics", name: "Paroles plein écran", kind: "extension", version: "0.3.0", palette: null, inGallery: "older" },
+        ];
+      case "submit_review": {
+        const theme = (args as { folder: string }).folder.endsWith("aurora");
+        const ok = (title: string, clean: string) => ({ title, level: "ok", clean, findings: [] });
+        return {
+          candidate: null,
+          inGallery: theme ? "no" : "older",
+          galleryVersion: theme ? null : "0.2.0",
+          summary: theme ? "7 contrôles bons · 0 à regarder · 0 bloquant(s)" : "6 contrôles bons · 1 à regarder · 0 bloquant(s)",
+          blocking: 0,
+          toLookAt: theme ? 0 : 1,
+          size: theme ? 18_400 : 9_100,
+          checks: [
+            ok("Mod valide", "Manifeste et fichiers corrects"),
+            ok("Programmes déguisés", "Seulement des fichiers permis"),
+            ok("Caractères invisibles", "Aucun caractère invisible"),
+            ok("Code brouillé", "Code lisible"),
+            theme
+              ? ok("Adresses internet", "Aucune adresse internet")
+              : {
+                  title: "Adresses internet",
+                  level: "look",
+                  clean: null,
+                  findings: [{ what: "Contacte https://lrclib.net/api/get.", place: "main.js, ligne 42", excerpt: "const res = await fetch(`https://lrclib.net/api/get?${q}`);", level: "look" }],
+                },
+            ok("Accès sensibles", "Aucun accès sensible"),
+            ok("Images piégées", "Images saines"),
+          ],
+        };
+      }
+      case "submit_prepare":
+        return { zip: "C:\\Users\\moi\\Downloads\\aurora-1.0.0.zip", formUrl: "https://github.com/Adrix-fr/spacetify/issues/new" };
+      case "take_start_page":
         return null;
       default:
         return null;

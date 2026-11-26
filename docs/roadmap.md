@@ -41,23 +41,35 @@ without leaving Spotify or opening the spacetify app.
   exactly what is downloaded, from where, when, and how it is checked.
   spacetify still never downloads programs.
 
-## Phase 6: anyone can submit a mod (later)
+## Phase 6: anyone can submit a mod (in progress)
 
-Not started: this only describes the plan.
+People send their own themes and extensions to the gallery. Each request is
+checked by a robot, then accepted or refused by the spacetify team. Only
+accepted mods appear in the gallery. Everything happens on GitHub, so there
+is no server of our own to run or secure.
 
-Like Spicetify's Marketplace, people will be able to send their own themes
-and extensions to the gallery. Each submission is reviewed by the owner of
-this repository (Adrix-fr), who accepts or refuses it. Only accepted mods
-appear in the gallery.
-
-- **Submitting.** An author sends a request on GitHub that points to their
-  mod and its version. spacetify's checks (manifest, validation, `doctor`
-  rules) run on it automatically, so the reviewer sees right away whether
-  it is valid.
-- **Reviewing.** Accepting a request adds the mod, pinned to that exact
-  version and its SHA-256, to the official list. Refusing it leaves the list
-  unchanged, with a reason for the author.
-- **Updates.** A new version of an accepted mod goes through the same
-  review before the gallery offers it.
+- **Submitting.** In the app, the *Submit* page (the gallery's *Submit a
+  mod* button leads there) runs the robot's checks on the author's computer,
+  puts the mod in a `.zip` in their Downloads folder and opens GitHub's
+  request form, already filled in, in their browser. The author drops the
+  `.zip` into it and sends it. spacetify itself never uploads anything. A
+  GitHub account is needed: it is also how the author hears back.
+- **The robot.** A GitHub Action (`gallery-submission.yml`) downloads the
+  mod (from GitHub only), opens it safely, scans it with ClamAV and writes a
+  security report on the request: hidden or disguised files, invisible
+  characters, scrambled code, every web address, access to the Spotify
+  account or the keyboard, scripts in pictures, and what changed since the
+  accepted version. Anything blocking stops there, with what to fix. If
+  nothing is blocking, it opens a pull request that adds the mod, pinned to
+  that version and the SHA-256 of each file, to `gallery/index.json`.
+- **Deciding.** The maintainers get a notification (GitHub's, on the phone
+  too). Merging accepts; closing with a comment refuses, and the comment is
+  sent to the author as the reason (`gallery-decision.yml`). An accepted mod
+  shows in every gallery within a few minutes.
+- **Who decides.** Only the spacetify team can merge: its members are
+  collaborators, `CODEOWNERS` asks them for each request, and branch
+  protection keeps everyone else out of `main`.
+- **Updates.** A new version goes through the same robot and review. Only
+  the account that sent the mod first can update it (`gallery/owners.json`).
 - **Removal.** A mod can be taken off the list at any time, for example if
   it stops working or breaks the rules.

@@ -3,7 +3,7 @@
 id = "hello-badge"
 name = "Hello badge"
 version = "1.0.0"
-author = "Adrix-fr"
+author = "spacetify"
 description = "Shows a small badge above the player bar, to check that extensions work."
 spacetify = ">=0.2.0"
 

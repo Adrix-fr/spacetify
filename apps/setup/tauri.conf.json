@@ -15,7 +15,7 @@
   },
   "bundle": {
     "active": false,
-    "publisher": "Adrix-fr (spacetify project)",
+    "publisher": "spacetify team",
     "copyright": "GPL-3.0-or-later",
     "shortDescription": "spacetify installer",
     "icon": ["../desktop/src-tauri/icons/icon.png", "../desktop/src-tauri/icons/icon.ico"]

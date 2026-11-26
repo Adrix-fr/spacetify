@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::Lang;
 use crate::mods::{ModIssue, ModKind};
+use crate::service::Text;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -157,6 +158,9 @@ pub enum Error {
     #[error("`{0}` is not in the gallery.")]
     NotInGallery(String),
 
+    #[error("{}", .0.en)]
+    Submission(Text),
+
     #[error("File error on {}: {source}", .path.display())]
     Io {
         path: PathBuf,
@@ -222,6 +226,7 @@ impl Error {
             Self::GalleryFileMismatch { id, file } => format!("Le fichier {file} reçu pour `{id}` n'est pas celui de la liste de la galerie. Par prudence, rien n'a été installé."),
             Self::GalleryModMismatch(id) => format!("Ce qui a été reçu pour `{id}` ne correspond pas à la liste de la galerie. Par prudence, rien n'a été installé."),
             Self::NotInGallery(id) => format!("`{id}` n'est pas dans la galerie."),
+            Self::Submission(text) => text.fr.clone(),
             Self::Io { path, source } => format!("Erreur de fichier sur {} : {source}", path.display()),
         }
     }

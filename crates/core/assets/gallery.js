@@ -73,6 +73,8 @@
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>',
     check:
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    plus:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     back:
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
     close:
@@ -122,6 +124,7 @@
 .stg-brand{display:flex;align-items:center;gap:8px;color:#a1a1a6;font-size:13px;font-weight:700}
 .stg-title{margin:6px 0 4px;font-size:30px;line-height:36px;font-weight:700;letter-spacing:-.01em}
 .stg-sub{margin:0;color:#a1a1a6}
+.stg-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .stg-search{width:280px;max-width:100%;height:40px;border-radius:8px;background:#161618;border:1px solid rgba(237,237,237,.08);
   display:flex;align-items:center;gap:10px;padding:0 12px;color:#85858b}
 .stg-search input{flex:1;min-width:0;background:transparent;border:0;outline:none;color:#ededed;font:inherit;font-size:13px}
@@ -293,6 +296,28 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
       state.busy.delete(mod.id);
       render();
     }
+  };
+
+  // Opens the spacetify app on its "Submit" page, which checks the mod and
+  // prepares the request.
+  const submitMod = async () => {
+    try {
+      await call("/v1/open-submit", {});
+      state.notice = {
+        tone: "good",
+        text: t("The spacetify app opens on “Submit a mod”.", "L'appli spacetify s'ouvre sur « Proposer un mod »."),
+      };
+    } catch (error) {
+      if (error.serviceDown) state.serviceDown = true;
+      else
+        state.notice = {
+          tone: "warn",
+          text:
+            textOf(error.text) ||
+            t("Open the spacetify app, then go to Submit.", "Ouvre l'appli spacetify, puis va sur Proposer."),
+        };
+    }
+    render();
   };
 
   const restart = async () => {
@@ -541,11 +566,26 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
           ),
         ),
         h(
-          "label",
-          { class: "stg-search" },
-          icon(ICONS.search),
-          h("span", { class: "stg-hidden" }, t("Search the gallery", "Chercher dans la galerie")),
-          search,
+          "div",
+          { class: "stg-actions" },
+          h(
+            "label",
+            { class: "stg-search" },
+            icon(ICONS.search),
+            h("span", { class: "stg-hidden" }, t("Search the gallery", "Chercher dans la galerie")),
+            search,
+          ),
+          h(
+            "button",
+            {
+              class: "stg-secondary",
+              style: "height:40px",
+              title: t("Send one of your mods to the gallery", "Envoyer un de tes mods à la galerie"),
+              onclick: submitMod,
+            },
+            icon(ICONS.plus),
+            t("Submit a mod", "Proposer un mod"),
+          ),
         ),
       ),
       h(

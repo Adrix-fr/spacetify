@@ -4,25 +4,34 @@
 mod commands;
 mod model;
 mod state;
+mod submit;
 mod terminal;
 mod tray;
 
 use std::sync::PoisonError;
 
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 pub fn run() {
     spacetify_core::logs::init(0);
     let state = state::AppState::load();
     let lang = state.lang();
+    let args: Vec<String> = std::env::args().collect();
+    let start_page = submit::StartPage(std::sync::Mutex::new(submit::StartPage::from_args(&args)));
 
     let built = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             tray::show_main(app);
+            // Started again for a page (the gallery's "Submit a mod"): the
+            // window already open goes there.
+            if let Some(page) = submit::StartPage::from_args(&args) {
+                let _ = app.emit("open-page", page);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(state)
+        .manage(start_page)
         .setup(move |app| {
             tray::create(app.handle(), lang)?;
             Ok(())
@@ -55,6 +64,10 @@ pub fn run() {
             commands::service_check,
             commands::get_settings,
             commands::set_language,
+            submit::take_start_page,
+            submit::submit_candidates,
+            submit::submit_review,
+            submit::submit_prepare,
             terminal::run_cli,
             terminal::stop_cli,
         ])

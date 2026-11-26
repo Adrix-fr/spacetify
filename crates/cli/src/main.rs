@@ -5,6 +5,7 @@
 
 mod args;
 mod commands;
+mod gallery_commands;
 mod interactive;
 mod menu;
 mod mod_commands;

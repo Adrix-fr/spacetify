@@ -11,6 +11,7 @@
   import Extensions from "./pages/Extensions.svelte";
   import Compat from "./pages/Compat.svelte";
   import Repair from "./pages/Repair.svelte";
+  import Submit from "./pages/Submit.svelte";
   import Terminal from "./pages/Terminal.svelte";
   import Settings from "./pages/Settings.svelte";
 
@@ -20,6 +21,7 @@
     { page: "extensions", label: () => "Extensions" },
     { page: "compat", label: () => tr("Compatibility", "Compatibilité") },
     { page: "repair", label: () => tr("Auto repair", "Réparation auto") },
+    { page: "submit", label: () => tr("Submit", "Proposer") },
     { page: "terminal", label: () => "Terminal" },
   ];
 
@@ -45,6 +47,10 @@
         app.page = "home";
         runAction(action);
       }),
+      // The gallery in Spotify asks for the "Submit" page.
+      events.openPage((page) => {
+        if (page === "submit") app.page = "submit";
+      }),
     ];
     (async () => {
       try {
@@ -53,6 +59,11 @@
         // English if the settings cannot be read.
       }
       document.documentElement.lang = app.lang;
+      try {
+        if ((await api.takeStartPage()) === "submit") app.page = "submit";
+      } catch {
+        // The home page, then.
+      }
       ready = true;
       await refreshOverview();
     })();
@@ -114,6 +125,8 @@
             <Compat />
           {:else if app.page === "repair"}
             <Repair />
+          {:else if app.page === "submit"}
+            <Submit />
           {:else if app.page === "terminal"}
             <Terminal />
           {:else}

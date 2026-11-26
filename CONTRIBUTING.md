@@ -48,6 +48,12 @@ cd apps/desktop && npm run check
   then validated like any mod. Nothing else goes to the internet. The
   gallery's local server (`crates/core/src/gallery/server.rs`) listens on
   `127.0.0.1` only and answers Spotify's interface only, with its secret.
+- **Submissions are reviewed, never run.** Mods sent to the gallery are
+  untrusted: the robot (`.github/workflows/gallery-submission.yml`) only
+  reads them, through `spacetify gallery form | unpack | review | add`, whose
+  logic is in `crates/core/src/gallery/submission.rs` and `review.rs`. The
+  request's text reaches the workflow through environment variables and
+  files, never inside a command line or `${{ }}` in a script.
 - **The gallery list matches the files.** `gallery/index.json` gives the
   SHA-256 of every file of every mod it lists. When you change one of those
   files (the examples are in it), update its hash: a test
@@ -84,6 +90,26 @@ cd apps/desktop && npm run check
   `apps/desktop/package.json` in step when bumping it.
 - **Commit messages** are short, in English, in the imperative mood
   (`Add …`, `Fix …`), with details in the body when useful.
+
+## Accepting or refusing a mod (maintainers)
+
+Each request made with the *Submit a mod* form gets a security report from
+the robot. If nothing is blocking, the robot opens a pull request that adds
+the mod to `gallery/index.json` (files in `gallery/mods/<id>/`, owner in
+`gallery/owners.json`); `CODEOWNERS` asks the maintainers to review it, so
+they get a notification, on the GitHub mobile app too.
+
+- **Accept:** merge the pull request. The robot thanks the author, and the
+  mod shows in every gallery within a few minutes.
+- **Refuse:** write the reason in a comment, then close the pull request.
+  The robot sends that last comment to the author and closes the request.
+  Common reasons can be kept as GitHub *saved replies*: "It does not work",
+  "A copy of another mod", "Forbidden content".
+- **Remove a mod later:** a pull request that takes its entry out of
+  `gallery/index.json` (and its folder out of `gallery/mods/`).
+
+Only an update sent by the mod's owner (the GitHub account that sent it
+first) is accepted by the robot; its report lists what changed.
 
 ## Reporting a bug
 
