@@ -76,8 +76,14 @@ jobs:
           check() { # name, jq condition the report must meet
             local name="$1" condition="$2"
             clamscan --recursive "$root/$name" > "$root/$name.clamav.txt" 2>&1
-            "$cli" gallery review "$root/$name" --antivirus "$root/$name.clamav.txt" \
-              --json "$root/$name.json" --markdown "$root/$name.md" || { failed=1; return; }
+            echo "--- $name: antivirus"
+            grep -E "FOUND|Infected files" "$root/$name.clamav.txt" || true
+            if ! "$cli" gallery review "$root/$name" --antivirus "$root/$name.clamav.txt" \
+                 --json "$root/$name.json" --markdown "$root/$name.md"; then
+              echo "$name: the review could not run"
+              failed=1
+              return
+            fi
             if jq -e "$condition" "$root/$name.json" > /dev/null; then
               verdict="as expected"
             else
