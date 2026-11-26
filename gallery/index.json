@@ -51,6 +51,25 @@
           "sha256": "0c3c1b50c26d40e88ef9d24e9b988a848d25bc59d98dd910309e0ed49cc05535"
         }
       ]
+    },
+    {
+      "id": "robot-test-spy",
+      "kind": "extension",
+      "name": "Robot test Spy",
+      "author": "Robot test",
+      "version": "1.0.0",
+      "description": "A test extension that looks like a spy.",
+      "path": "gallery/mods/robot-test-spy",
+      "files": [
+        {
+          "path": "extension.toml",
+          "sha256": "db288973959f6b4ef0ff3df64669391dd9c81e8cb8e06ce987d78d97bc2d21ba"
+        },
+        {
+          "path": "main.js",
+          "sha256": "7d3e7c1e1295021434ee55f1819448451cde53b570a9e8f8039eedf70debbe08"
+        }
+      ]
     }
   ]
 }
