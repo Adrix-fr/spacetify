@@ -86,9 +86,15 @@ const config = {
       signingIdentity: "-",
     },
     linux: {
-      // `notify-send`, which the service uses for its notifications.
-      deb: { recommends: ["libnotify-bin"] },
-      rpm: { recommends: ["libnotify"] },
+      // The tray icon's library, which the app loads at startup (and stops
+      // without), and `notify-send`, which the service uses for its
+      // notifications. The .rpm asks for the library by file name, which
+      // Fedora and openSUSE both understand.
+      deb: { depends: ["libayatana-appindicator3-1"], recommends: ["libnotify-bin"] },
+      rpm: {
+        depends: ["libayatana-appindicator3.so.1()(64bit)"],
+        recommends: ["libnotify"],
+      },
     },
   },
 };
