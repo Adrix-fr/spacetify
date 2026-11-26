@@ -16,10 +16,18 @@
   let checking = $state(false);
   let preparing = $state(false);
 
+  // Only the mods that can be sent: new ones, and updates of a mod of the
+  // gallery. Those already in it at this version (or a newer one), such as
+  // the ones installed from the gallery, have nothing to send.
+  const sendable = (c: Candidate) => c.inGallery === "no" || c.inGallery === "older";
+  const shown = $derived((candidates ?? []).filter(sendable));
+  const alreadyThere = $derived((candidates ?? []).length - shown.length);
+
   onMount(async () => {
     try {
       candidates = await api.submitCandidates();
-      if (candidates.length > 0) choose(candidates[0].folder);
+      const first = candidates.find(sendable);
+      if (first) choose(first.folder);
     } catch (error) {
       showError(error);
     }
@@ -104,8 +112,15 @@
       <div class="list">
         {#if candidates && candidates.length === 0}
           <p class="sub empty">{tr("No mod installed yet.", "Aucun mod installé pour l'instant.")}</p>
+        {:else if candidates && shown.length === 0}
+          <p class="sub empty">
+            {tr(
+              "Your installed mods are all in the gallery already. To send one of your own, pick its folder.",
+              "Tes mods installés sont tous déjà dans la galerie. Pour envoyer un des tiens, choisis son dossier.",
+            )}
+          </p>
         {/if}
-        {#each candidates ?? [] as c (c.folder)}
+        {#each shown as c (c.folder)}
           <label class="choice" class:on={folder === c.folder}>
             <input type="radio" name="mod" checked={folder === c.folder} onchange={() => choose(c.folder)} />
             {#if c.palette}
@@ -119,8 +134,16 @@
             </span>
           </label>
         {/each}
-        {#if folder && !(candidates ?? []).some((c) => c.folder === folder)}
+        {#if folder && !shown.some((c) => c.folder === folder)}
           <p class="meta mono picked">{folder}</p>
+        {/if}
+        {#if alreadyThere > 0 && shown.length > 0}
+          <p class="meta">
+            {tr(
+              `${alreadyThere} installed mod(s) already in the gallery are not listed.`,
+              `${alreadyThere} mod(s) installé(s) déjà dans la galerie ne sont pas affichés.`,
+            )}
+          </p>
         {/if}
         <button class="btn ghost" onclick={pickFolder}><FolderOpen size={14} strokeWidth={1.5} />{tr("Another folder…", "Un autre dossier…")}</button>
       </div>
