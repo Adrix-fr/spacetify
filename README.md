@@ -130,6 +130,8 @@ Run `spacetify` on its own to open the interactive menu (arrow keys, Enter,
 | `spacetify disable ID`    | Turn an extension or the active theme off          |
 | `spacetify theme ID`      | Choose the active theme (`none` for Spotify's own) |
 | `spacetify doctor`        | Check the active mods against the installed Spotify |
+| `spacetify new KIND ID`   | Create a theme or an extension, ready to edit      |
+| `spacetify dev DIR`       | Run a mod in Spotify, reloaded at each save        |
 | `spacetify service …`     | Automatic repair after updates, see below          |
 
 Useful options: `--yes` closes Spotify without asking, `--lang en|fr` picks the

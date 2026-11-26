@@ -10,7 +10,29 @@ hello-badge/
   main.js          required: the code
 ```
 
-## Try it
+## Start one
+
+```sh
+spacetify new extension my-extension   # makes the folder my-extension, ready to edit
+spacetify dev my-extension             # runs it in Spotify, reloads it at each save
+```
+
+`spacetify new` writes a manifest, a `main.js` that already does something
+(a button that opens a popup), and two files for your editor:
+`spacetify.d.ts` describes the whole API, and `jsconfig.json` tells editors
+such as VS Code to use it, so they suggest `spacetify.player.…` as you type
+and underline mistakes. spacetify never reads these two files, and the
+gallery leaves them out.
+
+`spacetify dev` installs the extension, starts Spotify in live mode and
+watches the folder: each time you save a file, the extension is checked and
+installed again, and Spotify's interface reloads in a second or two, without
+restarting Spotify. A save that breaks the manifest is reported in the
+terminal, and Spotify keeps the last good version. Close Spotify to stop.
+Like `launch --live`, it gives Spotify a debugging port on `127.0.0.1` while
+it runs.
+
+Without `dev`:
 
 ```sh
 spacetify install path/to/my-extension   # copies it and turns it on
@@ -117,6 +139,13 @@ Checks are grouped and run at most every 100 ms, so observing is cheap.
 Calls `callback(path)` when Spotify shows another page, for example
 `/playlist/37i9dQZF1DXcBWIGoYBM5M`.
 
+### `spacetify.currentPath() → string` and `spacetify.navigate(target)`
+
+`currentPath()` gives the page Spotify shows. In the desktop app the page's
+own address always stays `/index.html`, so use this instead of `location`.
+`navigate` shows another page, from a path (`"/search"`) or a Spotify URI
+(`"spotify:album:1XslIirSxfAhhxRdn4Li9t"`).
+
 ### `spacetify.addStyle(css) → remove()`
 
 Adds CSS to the page, after Spotify's own styles. Returns a function that
@@ -144,6 +173,105 @@ changed in the app replace the ones saved in Spotify; a setting reset in the
 app goes back to its default. Values set with `set()` from your own controls
 stay until the app changes them again, so both can live side by side.
 
+### `spacetify.player`
+
+What plays, and how to control it.
+
+```js
+await spacetify.player.ready();             // Spotify finds its player a moment after starting
+const now = spacetify.player.state();       // { track, isPlaying, position, duration, … }
+spacetify.player.onTrackChange((track) => spacetify.log.info("now playing", track && track.name));
+await spacetify.player.addToQueue("spotify:track:6rqhFgbbKwnb9MLmUQDhG6");
+```
+
+| Member                              | What it does                                                 |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `available`                         | `false` if this Spotify hides its player (see below)         |
+| `ready(timeout?)`                   | Resolves once the player can be used                         |
+| `state()`                           | What plays now, or `null` before the player is ready         |
+| `onChange(callback)`                | Called on every change: track, pause, position, shuffle…     |
+| `onTrackChange(callback)`           | Called with the new track when another one starts            |
+| `onVolumeChange(callback)`          | Called with the new volume, from 0 to 1                      |
+| `play()`, `pause()`, `togglePlay()` | Starts or stops playing                                      |
+| `next()`, `previous()`              | Skips                                                        |
+| `seek(milliseconds)`                | Goes to a position                                           |
+| `setShuffle(on)`                    | `true` or `false`                                            |
+| `setRepeat(mode)`                   | `"off"`, `"context"` (the album or playlist) or `"track"`    |
+| `playUri(uri)`                      | Plays a track, an album, a playlist…                         |
+| `getVolume()`, `setVolume(volume)`  | From 0 to 1                                                  |
+| `queue()`                           | `{ current, queued, next }`: what plays, what was added with *Add to queue*, what comes next |
+| `addToQueue(uris)`                  | One URI or a list                                            |
+| `removeFromQueue(uris)`             | Takes back tracks added to the queue                         |
+| `clearQueue()`                      | Empties what was added to the queue                          |
+
+`state()` gives `track` (`uri`, `name`, `type`, `duration`, `artists`,
+`album`, `image`, `isLocal`, `isExplicit`), `context` (the album or playlist
+playing), `isPlaying`, `isPaused`, `position` and `duration` in
+milliseconds, `shuffle`, `repeat` and `speed`. Every action returns a
+promise. Callbacks and promises are isolated like the rest of the API.
+
+**How it stays reliable.** Spotify hands its player to its own interface;
+spacetify finds it by what it can do, never by the generated names in
+Spotify's code, and changes nothing in Spotify. Your extension only sees
+spacetify's API above: if a Spotify update moves the player, spacetify is
+fixed in one place and your extension keeps working unchanged. Until then,
+`available` is `false` and `togglePlay`, `next` and `previous` still work
+through the player's buttons; the other actions reject with a clear error.
+
+### `spacetify.ui`
+
+Ready-made pieces of interface, drawn in Spotify's style and in the
+theme's colours. Each one is removed if the extension is stopped.
+
+```js
+const page = spacetify.ui.page({
+  render(container) {
+    container.innerHTML = "<h1>My page</h1>";
+  },
+});
+spacetify.ui.topbarButton({ label: "My page", icon: '<svg viewBox="0 0 16 16">…</svg>', onClick: () => page.open() });
+spacetify.ui.contextMenuItem({
+  label: "Log the link",
+  when: (target) => target.type === "track",
+  onClick: (target) => spacetify.log.info(target.uri),
+});
+```
+
+| Function                   | What it adds                                                    |
+| -------------------------- | --------------------------------------------------------------- |
+| `topbarButton(options)`    | A button in the top bar, after the back and forward arrows      |
+| `playbarButton(options)`   | A button in the player bar, before the lyrics button            |
+| `contextMenuItem(options)` | An entry at the end of Spotify's right-click menu               |
+| `popup(options)`           | A window over Spotify, closed with ×, Escape or a click outside |
+| `page(options)`            | A page of its own, in Spotify's main view                       |
+
+- **Buttons** take `label` (shown when pointed at), `onClick` and an
+  optional `icon`: one `<svg>` element, drawn with `currentColor` (without
+  it, the label's first letter shows). They return `{ element, setLabel,
+  setActive, remove }`; `setActive(true)` shows the button in the accent
+  colour.
+- **Right-click entries** take `label`, `onClick(target)`, and optionally
+  `icon` and `when(target)`, which hides the entry when it returns false.
+  `target` is what was right-clicked: `{ uri, uris, type, contextUri }`,
+  where `uris` holds every selected item and `type` is `"track"`,
+  `"album"`, `"playlist"`, `"artist"`…
+- **Popups** take `title`, `content` (text or an element of your own),
+  `width` in pixels and `onClose`. They return `{ element, close }`.
+- **Pages** take `render(container)`, called each time the page opens, and
+  an optional `name` to have several. `render` may return a function,
+  called when the page closes. The page lives at
+  `/spacetify/<extension id>` (or `/spacetify/<extension id>/<name>`):
+  Spotify's back and forward arrows work with it, and the sidebar and the
+  player bar stay. It returns `{ path, isOpen, open, remove }`.
+
+### `spacetify.keyboard.add(shortcut, callback, options?) → stop()`
+
+A keyboard shortcut, such as `"ctrl+shift+k"`, `"alt+arrowleft"` or
+`"f2"`. Modifiers are `ctrl`, `shift`, `alt` and `meta` (`cmd`). Letters
+and digits also match by their place on the keyboard, so shortcuts work
+with any layout. It does not fire while typing in a text field, unless
+`options.inInputs` is `true`. When it fires, Spotify does not see the keys.
+
 ### `spacetify.log.info / warn / error(...values)`
 
 Writes to Spotify's console, prefixed with `[spacetify:<id>]`. The last 300
@@ -169,13 +297,6 @@ __spacetify.logs()         // recent log lines of spacetify and every extension
 `status` is `loading`, `running`, `failed` (it threw while starting, or its
 file has a syntax error) or `stopped` (too many errors).
 
-## What the API does not do
-
-There is no API to read or control playback (current track, play, pause…).
-The only way to get that is to reach into Spotify's internal code, which is
-exactly what breaks with every update. If a reliable way appears, it will be
-added; until then, extensions work with what is on screen.
-
 ## Showing your mod in the gallery
 
 An optional `showcase/` folder gives your extension pictures, a longer
@@ -186,6 +307,20 @@ description and tags in the gallery. It works exactly as for themes: see
 
 Spicetify extensions use `Spicetify.Player`, `Spicetify.Platform` and React,
 which Spicetify creates by rewriting Spotify's code. spacetify never rewrites
-Spotify's code, so these extensions cannot run as they are. Small ones that
-only change the page can be ported by replacing their selectors with
-`data-testid` ones and using `waitFor` and `observe`.
+Spotify's code, so these extensions cannot run as they are, but most of what
+they do has an equivalent:
+
+| Spicetify                                         | spacetify                                     |
+| ------------------------------------------------- | --------------------------------------------- |
+| `Spicetify.Player.play`, `pause`, `next`, `seek`… | `spacetify.player.play`, `pause`, `next`, `seek`… |
+| `Spicetify.Player.data`, the `songchange` event   | `player.state()`, `player.onTrackChange`      |
+| `Spicetify.addToQueue`, `Platform.PlayerAPI`      | `player.addToQueue`, `player.queue()`         |
+| `Spicetify.Platform.History.push`, `listen`       | `spacetify.navigate`, `spacetify.onNavigate`  |
+| `Spicetify.Topbar.Button`, `Playbar.Button`       | `ui.topbarButton`, `ui.playbarButton`         |
+| `Spicetify.ContextMenu.Item`                      | `ui.contextMenuItem`                          |
+| `Spicetify.PopupModal.display`                    | `ui.popup`                                    |
+| `Spicetify.Mousetrap.bind`                        | `keyboard.add`                                |
+| a custom app                                      | `ui.page`                                     |
+
+Replace generated class names with `data-testid` selectors, and React
+components with plain elements.

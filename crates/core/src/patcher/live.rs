@@ -8,12 +8,14 @@
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tungstenite::Message;
+use tungstenite::stream::MaybeTlsStream;
 
 use super::Payload;
 use crate::spotify::{self, SpotifyInstall};
@@ -36,61 +38,169 @@ struct Target {
 ///
 /// `on_ready` is called once the payload is in place.
 pub fn run(install: &SpotifyInstall, payload: &Payload, on_ready: impl FnOnce()) -> Result<()> {
-    if spotify::is_running()? {
-        return Err(Error::SpotifyRunning);
-    }
-    let port = free_port()?;
-    spotify::launch(install, &[format!("--remote-debugging-port={port}")])?;
-
-    let ws_url = wait_for_ui(port)?;
-    let (mut socket, _) = tungstenite::connect(ws_url.as_str()).map_err(live_err)?;
-    let commands = commands(&payload.live_scripts());
-    for (id, method, params) in &commands {
-        let message = json!({ "id": id, "method": method, "params": params });
-        socket
-            .send(Message::text(message.to_string()))
-            .map_err(live_err)?;
-    }
-
-    let mut pending: Vec<u64> = commands.iter().map(|(id, _, _)| *id).collect();
-    while !pending.is_empty() {
-        let message = socket.read().map_err(live_err)?;
-        let Ok(reply) = serde_json::from_str::<Value>(message.to_text().unwrap_or_default()) else {
-            continue;
-        };
-        let Some(id) = reply["id"].as_u64() else {
-            continue;
-        };
-        if let Some(error) = reply.get("error") {
-            return Err(Error::Live(error.to_string()));
-        }
-        // An extension that throws is the runtime's business: it is logged
-        // in Spotify's console and must not stop the other mods.
-        if let Some(exception) = reply["result"].get("exceptionDetails") {
-            tracing::warn!("a mod script threw while starting: {exception}");
-        }
-        pending.retain(|&p| p != id);
-    }
-    tracing::info!("payload injected through port {port}");
+    let mut session = Session::start(install)?;
+    session.inject(payload, true)?;
+    tracing::info!("payload injected");
     on_ready();
 
     // Keep the session open: the injected script survives reloads only while we are attached.
-    while socket.read().is_ok() {}
+    while session.socket.read().is_ok() {}
     Ok(())
 }
 
-/// Each script is registered for future page loads (Spotify reloads its
-/// interface sometimes) and run once in the page that is already open.
-fn commands(scripts: &[String]) -> Vec<(u64, &'static str, Value)> {
-    let mut commands = vec![(1, "Page.enable", json!({}))];
+/// Like [`run`], for mod authors: each payload received on `updates`
+/// replaces the previous one and reloads Spotify's interface, without
+/// restarting Spotify.
+///
+/// The interface is reloaded once at the start too, so mods applied to the
+/// file give way to the live ones. `on_reload` is called after each reload
+/// asked for, with the number of reloads so far (0 for the first one).
+pub fn run_dev(
+    install: &SpotifyInstall,
+    payload: &Payload,
+    updates: &Receiver<Payload>,
+    mut on_reload: impl FnMut(usize),
+) -> Result<()> {
+    let mut session = Session::start(install)?;
+    session.inject(payload, false)?;
+    session.reload()?;
+    on_reload(0);
+    session.set_read_timeout(Some(POLL))?;
+
+    let mut reloads = 0;
+    loop {
+        match session.socket.read() {
+            Ok(_) => continue,
+            Err(err) if is_timeout(&err) => {}
+            // Spotify was closed.
+            Err(_) => return Ok(()),
+        }
+        // Only the last of several quick saves matters.
+        let Some(next) = updates.try_iter().last() else {
+            continue;
+        };
+        session.inject(&next, false)?;
+        session.reload()?;
+        reloads += 1;
+        on_reload(reloads);
+    }
+}
+
+/// How often a dev session looks for new mods while Spotify is quiet.
+const POLL: Duration = Duration::from_millis(250);
+/// How long Spotify has to answer one command.
+const REPLY_TIMEOUT: Duration = Duration::from_secs(30);
+
+type Socket = tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
+
+/// A connection to Spotify's interface through its debugging port.
+struct Session {
+    socket: Socket,
+    next_id: u64,
+    /// Scripts registered for future page loads, to take them back.
+    registered: Vec<String>,
+}
+
+impl Session {
+    fn start(install: &SpotifyInstall) -> Result<Self> {
+        if spotify::is_running()? {
+            return Err(Error::SpotifyRunning);
+        }
+        let port = free_port()?;
+        spotify::launch(install, &[format!("--remote-debugging-port={port}")])?;
+        let ws_url = wait_for_ui(port)?;
+        let (socket, _) = tungstenite::connect(ws_url.as_str()).map_err(live_err)?;
+        tracing::info!("attached to Spotify through port {port}");
+        let mut session = Self {
+            socket,
+            next_id: 0,
+            registered: Vec::new(),
+        };
+        session.call("Page.enable", json!({}))?;
+        Ok(session)
+    }
+
+    /// Sends a command and waits for its answer, skipping Spotify's events.
+    fn call(&mut self, method: &str, params: Value) -> Result<Value> {
+        self.next_id += 1;
+        let id = self.next_id;
+        let message = json!({ "id": id, "method": method, "params": params });
+        self.socket
+            .send(Message::text(message.to_string()))
+            .map_err(live_err)?;
+        let deadline = Instant::now() + REPLY_TIMEOUT;
+        loop {
+            let message = match self.socket.read() {
+                Ok(message) => message,
+                Err(err) if is_timeout(&err) && Instant::now() < deadline => continue,
+                Err(err) => return Err(live_err(err)),
+            };
+            let Ok(reply) = serde_json::from_str::<Value>(message.to_text().unwrap_or_default())
+            else {
+                continue;
+            };
+            if reply["id"].as_u64() != Some(id) {
+                continue;
+            }
+            if let Some(error) = reply.get("error") {
+                return Err(Error::Live(error.to_string()));
+            }
+            return Ok(reply["result"].clone());
+        }
+    }
+
+    /// Registers each script for future page loads (Spotify reloads its
+    /// interface sometimes), replacing the previous ones, and with `run_now`
+    /// runs it once in the page that is already open.
+    fn inject(&mut self, payload: &Payload, run_now: bool) -> Result<()> {
+        for identifier in std::mem::take(&mut self.registered) {
+            self.call(
+                "Page.removeScriptToEvaluateOnNewDocument",
+                json!({ "identifier": identifier }),
+            )?;
+        }
+        for (method, params) in commands(&payload.live_scripts(), run_now) {
+            let result = self.call(method, params)?;
+            if let Some(identifier) = result["identifier"].as_str() {
+                self.registered.push(identifier.to_owned());
+            }
+            // An extension that throws is the runtime's business: it is logged
+            // in Spotify's console and must not stop the other mods.
+            if let Some(exception) = result.get("exceptionDetails") {
+                tracing::warn!("a mod script threw while starting: {exception}");
+            }
+        }
+        Ok(())
+    }
+
+    fn reload(&mut self) -> Result<()> {
+        self.call("Page.reload", json!({})).map(drop)
+    }
+
+    fn set_read_timeout(&mut self, timeout: Option<Duration>) -> Result<()> {
+        if let MaybeTlsStream::Plain(stream) = self.socket.get_mut() {
+            stream.set_read_timeout(timeout).map_err(live_err)?;
+        }
+        Ok(())
+    }
+}
+
+fn is_timeout(err: &tungstenite::Error) -> bool {
+    matches!(err, tungstenite::Error::Io(io) if matches!(io.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut))
+}
+
+/// Each script is registered for future page loads and, with `run_now`, run
+/// once in the page that is already open.
+fn commands(scripts: &[String], run_now: bool) -> Vec<(&'static str, Value)> {
+    let mut commands = Vec::new();
     for script in scripts {
-        let id = commands.len() as u64 + 1;
         commands.push((
-            id,
             "Page.addScriptToEvaluateOnNewDocument",
             json!({ "source": script }),
         ));
-        commands.push((id + 1, "Runtime.evaluate", json!({ "expression": script })));
+        if run_now {
+            commands.push(("Runtime.evaluate", json!({ "expression": script })));
+        }
     }
     commands
 }
@@ -197,13 +307,32 @@ Content-Length:2
     }
 
     #[test]
-    fn sends_every_script_twice_with_unique_ids() {
+    fn registers_every_script_and_runs_it_only_when_asked() {
         let scripts = ["a".to_owned(), "b".to_owned()];
-        let commands = commands(&scripts);
-        let ids: Vec<u64> = commands.iter().map(|(id, _, _)| *id).collect();
-        assert_eq!(ids, [1, 2, 3, 4, 5]);
-        assert_eq!(commands[3].1, "Page.addScriptToEvaluateOnNewDocument");
-        assert_eq!(commands[4].2["expression"], "b");
+        let now = commands(&scripts, true);
+        let methods: Vec<&str> = now.iter().map(|(method, _)| *method).collect();
+        assert_eq!(
+            methods,
+            [
+                "Page.addScriptToEvaluateOnNewDocument",
+                "Runtime.evaluate",
+                "Page.addScriptToEvaluateOnNewDocument",
+                "Runtime.evaluate"
+            ]
+        );
+        assert_eq!(now[3].1["expression"], "b");
+        let later = commands(&scripts, false);
+        assert_eq!(later.len(), 2);
+        assert_eq!(later[1].1["source"], "b");
+    }
+
+    #[test]
+    fn tells_a_quiet_socket_from_a_closed_one() {
+        let quiet = tungstenite::Error::Io(io::ErrorKind::WouldBlock.into());
+        assert!(is_timeout(&quiet));
+        let quiet = tungstenite::Error::Io(io::ErrorKind::TimedOut.into());
+        assert!(is_timeout(&quiet));
+        assert!(!is_timeout(&tungstenite::Error::ConnectionClosed));
     }
 
     #[test]

@@ -6,7 +6,7 @@
 // (see crates/core/src/gallery/server.rs). This file is one function, put
 // into runtime.js when the payload is built. It must never break Spotify:
 // every handler is guarded, and the page only uses its own elements.
-(function startGallery(link, log) {
+(function startGallery(link, log, pagePath) {
   "use strict";
 
   const ROOT_ID = "spacetify-gallery";
@@ -25,6 +25,8 @@
       .toLowerCase()
       .startsWith("fr");
   const t = (en, fr) => (french() ? fr : en);
+  // The page Spotify shows (its own address stays /index.html in the app).
+  const path = () => (typeof pagePath === "function" ? pagePath() : location.pathname);
   const textOf = (text) => (text ? (french() ? text.fr : text.en) || text.en || "" : "");
 
   const safe = (fn) =>
@@ -1141,7 +1143,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   function open() {
     if (state.open) return;
     state.open = true;
-    openedAt = location.pathname;
+    openedAt = path();
     root = h("div", { id: ROOT_ID, role: "dialog", "aria-label": t("spacetify gallery", "Galerie spacetify") });
     document.body.appendChild(root);
     place();
@@ -1227,7 +1229,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     queued = false;
     if (!button.isConnected || button.classList.contains("stg-floating")) placeButton();
     else align();
-    if (state.open && location.pathname !== openedAt) close();
+    if (state.open && path() !== openedAt) close();
     else if (state.open) place();
   });
   new MutationObserver(() => {

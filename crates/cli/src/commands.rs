@@ -15,10 +15,11 @@ use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
 use crate::args::{Command, InstallerStep};
-use crate::{gallery_commands, mod_commands, service_commands, ui};
+use crate::{dev_commands, gallery_commands, mod_commands, service_commands, ui};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
+#[derive(Clone)]
 pub struct Context {
     pub lang: Lang,
     pub spotify_path: Option<PathBuf>,
@@ -66,6 +67,8 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Disable { id } => mod_commands::disable(ctx, &id),
         Command::Theme { id } => mod_commands::theme(ctx, &id),
         Command::Doctor => mod_commands::doctor(ctx),
+        Command::New { kind, id, into } => dev_commands::new(ctx, kind, &id, into.as_deref()),
+        Command::Dev { path, close } => dev_commands::dev(ctx, &path, close.yes),
         Command::Service { action } => service_commands::run(ctx, action),
         Command::Gallery { action } => gallery_commands::run(ctx, action),
         Command::Installer { step } => installer(ctx, step),

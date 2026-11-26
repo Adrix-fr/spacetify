@@ -18,6 +18,16 @@ At least one of `colors.toml` and `theme.css` is needed.
 ## Try it
 
 ```sh
+spacetify new theme my-theme   # makes the folder my-theme, ready to edit
+spacetify dev my-theme         # shows it in Spotify, reloads it at each save
+```
+
+`spacetify dev` starts Spotify in live mode and reloads the theme in a
+second or two each time you save a file, without restarting Spotify. Close
+Spotify to stop. The [extension guide](extensions.md#start-one) gives the
+details. Without it:
+
+```sh
 spacetify install path/to/my-theme   # copies it and makes it the active theme
 spacetify doctor                     # checks it against your Spotify
 spacetify apply                      # shows it in Spotify

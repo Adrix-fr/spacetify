@@ -1,0 +1,9 @@
+# {{name}}: a spacetify theme. Every field is explained in docs/themes.md,
+# in spacetify's repository.
+
+id = "{{id}}"
+name = "{{name}}"
+version = "0.1.0"
+author = "Your name"
+description = "What this theme looks like, in one sentence."
+spacetify = ">={{spacetify}}"

@@ -1,0 +1,26 @@
+# Colours of {{name}}.
+#
+# Each [section] is one of Spotify's colour sets, and each key one of its
+# colour tokens. Anything you leave out keeps Spotify's own colour. The full
+# list is in docs/themes.md.
+
+# The general look of the app.
+[base]
+background-base = "#14161b"
+background-highlight = "#20232b"
+background-press = "#0e1014"
+background-elevated-base = "#20232b"
+background-elevated-highlight = "#2a2e38"
+text-subdued = "#a3a9b8"
+text-bright-accent = "#7cc4ff"
+essential-bright-accent = "#7cc4ff"
+
+# The frame around the panels (black in Spotify).
+[app-frame]
+background-base = "#0b0c10"
+
+# Accent buttons, such as the big play button (green in Spotify).
+[bright-accent]
+background-base = "#7cc4ff"
+background-highlight = "#9ad2ff"
+background-press = "#5fb3f5"

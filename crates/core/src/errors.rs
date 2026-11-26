@@ -103,6 +103,15 @@ pub enum Error {
     #[error("{} is already in spacetify's mods folder. Install from your own copy of the mod instead.", .0.display())]
     InstallFromStore(PathBuf),
 
+    #[error("`{0}` is not a valid id: use lowercase letters, digits and dashes, such as `my-mod`.")]
+    InvalidId(String),
+
+    #[error("{} already exists. Choose another id or another folder.", .0.display())]
+    AlreadyExists(PathBuf),
+
+    #[error("Could not watch the mod's folder for changes: {0}")]
+    Watch(String),
+
     #[error("{0} problem(s) found with your mods for this version of Spotify. Details are above.")]
     Incompatible(usize),
 
@@ -211,6 +220,9 @@ impl Error {
             Self::InvalidSetting { id, setting } => format!("`{setting}` n'est pas un réglage valide de `{id}`, ou la valeur ne lui convient pas."),
             Self::IdTaken { id, kind } => format!("L'identifiant `{id}` est déjà pris par un(e) {} installé(e). Chaque identifiant doit être unique.", kind.label(Lang::Fr)),
             Self::InstallFromStore(path) => format!("{} est déjà dans le dossier des mods de spacetify. Installe plutôt depuis ta propre copie du mod.", path.display()),
+            Self::InvalidId(id) => format!("`{id}` n'est pas un identifiant valide : utilise des minuscules, des chiffres et des tirets, comme `mon-mod`."),
+            Self::AlreadyExists(path) => format!("{} existe déjà. Choisis un autre identifiant ou un autre dossier.", path.display()),
+            Self::Watch(reason) => format!("Impossible de surveiller les changements du dossier du mod : {reason}"),
             Self::Incompatible(count) => format!("{count} problème(s) trouvé(s) avec tes mods pour cette version de Spotify. Le détail est au-dessus."),
             Self::Busy => "Une autre opération de spacetify est en cours. Réessaie dans un instant.".into(),
             Self::NotPatched => "Spotify n'a pas de mods appliqués, il n'y a donc pas de mise à jour à simuler. Lance d'abord `spacetify apply`.".into(),

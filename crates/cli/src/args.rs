@@ -71,6 +71,26 @@ pub enum Command {
     },
     /// Check that the active mods still match this version of Spotify
     Doctor,
+    /// Create a new theme or extension, ready to edit
+    New {
+        /// What to create
+        #[arg(value_enum, value_name = "KIND")]
+        kind: NewKind,
+        /// Its id: lowercase letters, digits and dashes
+        #[arg(value_name = "ID")]
+        id: String,
+        /// Where to create its folder (the current folder by default)
+        #[arg(long, value_name = "DIR")]
+        into: Option<PathBuf>,
+    },
+    /// Run a mod in Spotify and reload it each time a file is saved
+    Dev {
+        /// Folder of the mod
+        #[arg(value_name = "DIR")]
+        path: PathBuf,
+        #[command(flatten)]
+        close: CloseArgs,
+    },
     /// Automatic repair after Spotify updates (background service)
     Service {
         #[command(subcommand)]
@@ -87,6 +107,12 @@ pub enum Command {
         #[command(subcommand)]
         step: InstallerStep,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum NewKind {
+    Extension,
+    Theme,
 }
 
 #[derive(Debug, Clone, Copy, Subcommand)]
@@ -298,6 +324,21 @@ fn in_french(command: clap::Command) -> clap::Command {
         .mut_subcommand("doctor", |c| {
             c.about("Vérifier que les mods actifs correspondent encore à cette version de Spotify")
         })
+        .mut_subcommand("new", |c| {
+            c.about("Créer un nouveau thème ou une nouvelle extension, prêt à modifier")
+                .mut_arg("kind", |a| a.help("Ce qu'il faut créer"))
+                .mut_arg("id", |a| {
+                    a.help("Son identifiant : minuscules, chiffres et tirets")
+                })
+                .mut_arg("into", |a| {
+                    a.help("Où créer son dossier (le dossier courant par défaut)")
+                })
+        })
+        .mut_subcommand("dev", |c| {
+            c.about("Lancer un mod dans Spotify et le recharger à chaque enregistrement d'un fichier")
+                .mut_arg("path", |a| a.help("Dossier du mod"))
+                .mut_arg("yes", |a| a.help(YES))
+        })
         .mut_subcommand("service", |c| {
             c.about("Réparation automatique après les mises à jour de Spotify (service en arrière-plan)")
                 .mut_subcommand("enable", |c| {
@@ -390,6 +431,24 @@ mod tests {
             cli.command,
             Some(Command::Gallery {
                 action: GalleryAction::Review { json: Some(_), .. }
+            })
+        ));
+        let cli = Cli::try_parse_from(["spacetify", "new", "extension", "my-ext"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::New {
+                kind: NewKind::Extension,
+                into: None,
+                ..
+            })
+        ));
+        assert!(Cli::try_parse_from(["spacetify", "new", "plugin", "x"]).is_err());
+        let cli = Cli::try_parse_from(["spacetify", "dev", "my-ext", "--yes"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Dev {
+                close: CloseArgs { yes: true },
+                ..
             })
         ));
         let cli = Cli::try_parse_from(["spacetify", "ls"]).unwrap();

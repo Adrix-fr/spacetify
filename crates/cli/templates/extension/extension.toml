@@ -1,0 +1,20 @@
+# {{name}}: a spacetify extension. Every field is explained in
+# docs/extensions.md, in spacetify's repository.
+
+id = "{{id}}"
+name = "{{name}}"
+version = "0.1.0"
+author = "Your name"
+description = "What this extension does, in one sentence."
+spacetify = ">={{spacetify}}"
+
+# Every selector main.js gives to waitFor, observe or querySelector, so that
+# `spacetify doctor` can check them against the installed Spotify.
+selectors = []
+
+# A setting, read with spacetify.settings.get("greeting"). Shown in the
+# spacetify app, under Extensions.
+[settings.greeting]
+type = "string"
+default = "Hello from {{name}}!"
+label = "Message of the popup"

@@ -64,6 +64,22 @@ fn a_plain_theme_is_clean() {
 }
 
 #[test]
+fn editor_helpers_are_allowed_next_to_an_extension() {
+    let dir = extension("spacetify.player.onTrackChange(() => {});\n");
+    write(
+        dir.path(),
+        &[
+            ("spacetify.d.ts", b"declare const spacetify: unknown;\n"),
+            ("jsconfig.json", b"{ \"compilerOptions\": {} }\n"),
+        ],
+    );
+    let report = review(dir.path(), None);
+    assert_eq!((report.blocking, report.to_look_at), (0, 0), "{report:#?}");
+    assert!(is_note("spacetify.d.ts") && is_note("JSConfig.json"));
+    assert!(!is_note("types/spacetify.d.ts"));
+}
+
+#[test]
 fn the_examples_of_the_repository_are_clean() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
     for dir in ["themes/midnight", "extensions/hello-badge"] {

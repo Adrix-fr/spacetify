@@ -3939,8 +3939,10 @@ dependencies = [
  "clap",
  "crossterm",
  "embed-resource",
+ "notify",
  "serde_json",
  "spacetify-core",
+ "tempfile",
  "tracing",
 ]
 

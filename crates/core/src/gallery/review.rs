@@ -564,11 +564,14 @@ enum TextKind {
     Notes,
 }
 
-/// Files that may sit next to a mod without being part of it.
+/// Files that may sit next to a mod without being part of it: notes, and
+/// the editor helpers `spacetify new` writes (never sent to the gallery).
 pub fn is_note(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     !path.contains('/')
         && (lower == "readme.md"
+            || lower == "jsconfig.json"
+            || lower == "spacetify.d.ts"
             || lower == "readme.txt"
             || lower == "license"
             || lower == "license.md"

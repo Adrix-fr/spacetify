@@ -419,7 +419,7 @@ fn capitalize(text: &str) -> String {
     })
 }
 
-fn apply_hint(lang: Lang) {
+pub fn apply_hint(lang: Lang) {
     ui::hint(tr!(
         lang,
         "Run `spacetify apply` (or `spacetify launch --live`) to see the change in Spotify.",
