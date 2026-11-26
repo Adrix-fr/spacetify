@@ -10,6 +10,7 @@ midnight/
   colors.toml   optional: Spotify's colours, replaced
   theme.css     optional: any other CSS
   assets/       optional: images and fonts used by theme.css
+  showcase/     optional: pictures and text for the gallery page
 ```
 
 At least one of `colors.toml` and `theme.css` is needed.
@@ -163,6 +164,43 @@ spacetify embeds them in the stylesheet, so they work the same with
 `apply` and with `launch --live`. Supported: png, jpg, gif, webp, svg, woff,
 woff2, ttf, otf. Limit: 2 MiB per file, 10 MiB for the whole theme. Remote
 URLs (`https://…`) are left as they are, but Spotify may block them.
+
+## Showing your mod in the gallery
+
+The gallery shows every mod as a card, and a page of its own when it is
+clicked. An optional `showcase/` folder fills them in. It works the same for
+themes and extensions, and it is never put into Spotify: it is only shown in
+the gallery.
+
+```text
+my-theme/
+  showcase/
+    1-home.png      pictures, in name order: the first is the card's cover
+    2-playlist.png
+    about.md        a longer description, in English
+    about.fr.md     the same in French (optional)
+    showcase.toml   tags = ["dark", "pastel"]
+```
+
+- **Pictures**: png, jpg, webp or gif, 6 at most, 1 MiB each. Wide
+  pictures (16:9, such as 1600 × 900) look best. Clicking one shows it
+  full size.
+- **`about.md`**: up to 16 KiB of simple Markdown: `#` titles, paragraphs,
+  lists, `**bold**`, `*italics*`, `` `code` ``, quotes and
+  `[links](https://…)` (https only). HTML is shown as plain text, and
+  pictures cannot go inside the text: put them in the folder. When Spotify
+  is in French, `about.fr.md` is shown if it is there.
+- **Tags**: up to 6, in lowercase letters, digits and `-`, 20 characters
+  at most. People can search for them.
+
+Mind what your pictures show: a screenshot of your Spotify shows your
+library, your playlists and your account picture. Use a test account, or
+crop them.
+
+Every file of the showcase gets its SHA-256 in the gallery list, like the
+mod's own files, and is checked when the gallery downloads it. The robot
+reviews it like the rest of the mod: anything else in `showcase/` blocks the
+request.
 
 ## Coming from Spicetify
 

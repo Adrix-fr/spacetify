@@ -585,6 +585,9 @@ pub fn add(dir: &Path, repo: &Path, owner: &str, form: &Form) -> Result<Added> {
         ));
     }
 
+    // Pictures and texts for the gallery page, checked before anything is copied.
+    let showcase = super::showcase::read(dir)?;
+
     let mut catalog = read_catalog(repo)?;
     let mut owners = read_owners(repo)?;
     let existing = catalog.mods.iter().position(|e| e.id == id);
@@ -655,10 +658,13 @@ pub fn add(dir: &Path, repo: &Path, owner: &str, form: &Form) -> Result<Added> {
             fs::create_dir_all(parent).map_err(Error::io(parent))?;
         }
         fs::write(&to, &bytes).map_err(Error::io(&to))?;
-        files.push(FileEntry {
-            path: file,
-            sha256: sha256_hex(&bytes),
-        });
+        // The showcase is listed apart: it is never installed.
+        if !super::showcase::is_showcase_path(&file) {
+            files.push(FileEntry {
+                path: file,
+                sha256: sha256_hex(&bytes),
+            });
+        }
     }
 
     let entry = Entry {
@@ -679,6 +685,8 @@ pub fn add(dir: &Path, repo: &Path, owner: &str, form: &Form) -> Result<Added> {
             Loaded::Theme(theme) => Some(Preview::of_colors(&theme.colors)),
             Loaded::Extension(_) => None,
         },
+        showcase,
+        updated: Some(super::today()),
     };
     match existing {
         Some(at) => catalog.mods[at] = entry,

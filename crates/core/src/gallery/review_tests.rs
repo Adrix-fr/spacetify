@@ -73,6 +73,47 @@ fn the_examples_of_the_repository_are_clean() {
 }
 
 #[test]
+fn a_showcase_is_allowed_and_checked() {
+    let png: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x10\0\0\0\x10";
+    let dir = theme(&[
+        ("showcase/1-home.png", png),
+        (
+            "showcase/about.md",
+            b"# Aurora\nSoft colours. See https://example.com\n",
+        ),
+        (
+            "showcase/about.fr.md",
+            "# Aurora\nDes couleurs douces.\n".as_bytes(),
+        ),
+        ("showcase/showcase.toml", b"tags = [\"dark\"]\n"),
+    ]);
+    let report = review(dir.path(), None);
+    assert_eq!((report.blocking, report.to_look_at), (0, 0), "{report:#?}");
+    assert_eq!(report.files.len(), 6);
+
+    let dir = theme(&[
+        ("showcase/1-home.png", b"MZ\x90\0a program"),
+        ("showcase/run.js", b"alert(1)"),
+        ("showcase/about.md", "Hidden\u{202e}text".as_bytes()),
+    ]);
+    let report = review(dir.path(), None);
+    let blocked: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.level == Level::Block)
+        .filter_map(|f| f.file.as_deref())
+        .collect();
+    for file in [
+        "showcase/1-home.png",
+        "showcase/run.js",
+        "showcase/about.md",
+        "showcase",
+    ] {
+        assert!(blocked.contains(&file), "{file} not blocked: {blocked:?}");
+    }
+}
+
+#[test]
 fn an_invalid_mod_is_blocked() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), &[("theme.toml", b"id = 3")]);

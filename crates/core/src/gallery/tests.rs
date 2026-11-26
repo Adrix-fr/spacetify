@@ -29,6 +29,14 @@ fn files_of(dir: &Path) -> Vec<FileEntry> {
     out
 }
 
+/// The files of the mod itself, without its showcase.
+fn mod_part(dir: &Path) -> Vec<FileEntry> {
+    files_of(dir)
+        .into_iter()
+        .filter(|file| !showcase::is_showcase_path(&file.path))
+        .collect()
+}
+
 /// A copy of part of the repository, with a list for `folders`.
 fn fake_repo(folders: &[&str]) -> (tempfile::TempDir, Catalog) {
     let dir = tempfile::tempdir().unwrap();
@@ -52,11 +60,13 @@ fn fake_repo(folders: &[&str]) -> (tempfile::TempDir, Catalog) {
             description: meta.description.clone().unwrap_or_default(),
             description_fr: None,
             path: (*folder).to_owned(),
-            files: files_of(&src),
+            files: mod_part(&src),
             preview: match &loaded {
                 Loaded::Theme(theme) => Some(Preview::of_colors(&theme.colors)),
                 Loaded::Extension(_) => None,
             },
+            showcase: showcase::read(&src).unwrap(),
+            updated: None,
         });
     }
     let catalog = Catalog { format: 1, mods };
@@ -73,10 +83,16 @@ fn the_official_list_matches_the_files_in_the_repository() {
     assert!(!catalog.mods.is_empty());
     for entry in &catalog.mods {
         let dir = root.join(&entry.path);
-        let files = files_of(&dir);
+        let files = mod_part(&dir);
         assert_eq!(
             entry.files, files,
             "the files of `{}` changed: update gallery/index.json",
+            entry.id
+        );
+        assert_eq!(
+            entry.showcase,
+            showcase::read(&dir).unwrap(),
+            "the showcase of `{}` changed: update gallery/index.json",
             entry.id
         );
         let loaded = mods::load_dir(&dir).unwrap();
@@ -149,6 +165,54 @@ fn a_changed_file_is_refused_and_nothing_is_installed() {
 }
 
 #[test]
+fn the_showcase_is_shown_but_never_installed() {
+    let (repo, mut catalog) = fake_repo(&["examples/themes/midnight"]);
+    let folder = repo.path().join("examples/themes/midnight/showcase");
+    fs::create_dir_all(&folder).unwrap();
+    let png = b"\x89PNG\r\n\x1a\nrest of the picture";
+    fs::write(folder.join("1.png"), png).unwrap();
+    catalog.mods[0].showcase = Some(Showcase {
+        images: vec![FileEntry {
+            path: "showcase/1.png".into(),
+            sha256: sha256_hex(png),
+        }],
+        ..Showcase::default()
+    });
+    let source = Source::Folder(repo.path().to_path_buf());
+    let home = tempfile::tempdir().unwrap();
+    let dirs = AppDirs::in_folder(home.path());
+    let entry = &catalog.mods[0];
+
+    // Fetched and kept by its hash, so it is read from disk the next time.
+    assert_eq!(showcase_file(&source, &dirs, entry, "1.png").unwrap(), png);
+    fs::write(folder.join("1.png"), b"changed").unwrap();
+    assert_eq!(showcase_file(&source, &dirs, entry, "1.png").unwrap(), png);
+    // A changed file that is not kept yet is refused.
+    fs::remove_dir_all(showcase_cache_dir(&dirs)).unwrap();
+    assert!(matches!(
+        showcase_file(&source, &dirs, entry, "1.png"),
+        Err(Error::GalleryFileMismatch { .. })
+    ));
+    // Only files the list names can be asked for.
+    assert!(showcase_file(&source, &dirs, entry, "theme.css").is_err());
+
+    // Installing takes the mod's files only.
+    let store = ModStore::new(home.path());
+    install(&source, entry, &store).unwrap();
+    assert!(
+        !store
+            .dir_of(ModKind::Theme)
+            .join("midnight/showcase")
+            .exists()
+    );
+
+    let views = views(Some(&catalog), &source, &store, &Config::default()).unwrap();
+    let shown = views[0].showcase.as_ref().unwrap();
+    assert_eq!(shown.images, ["1.png"]);
+    assert!(!shown.about);
+}
+
+#[test]
 fn a_mod_that_is_not_what_the_list_says_is_refused() {
     let (repo, mut catalog) = fake_repo(&["examples/themes/midnight"]);
     catalog.mods[0].version = "9.9.9".into();
@@ -207,7 +271,22 @@ fn odd_lists_are_refused() {
             r##""preview":{"frame":"red;x:y","background":"#000","highlight":"#000","text":"#000","accent":"#000"},"files""##,
         ),
         good.replace("\"author\":\"A\"", "\"author\":\"A\",\"extra\":1"),
+        // A showcase may only point inside showcase/, at the right kind of file.
+        good.replace("\"files\"", &format!(r#""showcase":{{"images":[{}]}},"files""#, file("main.js", &hash))),
+        good.replace("\"files\"", &format!(r#""showcase":{{"images":[{}]}},"files""#, file("showcase/x.exe", &hash))),
+        good.replace("\"files\"", &format!(r#""showcase":{{"about":{}}},"files""#, file("showcase/1.png", &hash))),
+        good.replace("\"files\"", r#""showcase":{"tags":["Not A Tag"]},"files""#),
+        good.replace("\"files\"", r#""updated":"yesterday","files""#),
     ];
+    let with_showcase = good.replace(
+        "\"files\"",
+        &format!(
+            r#""showcase":{{"images":[{}],"about":{},"tags":["dark"]}},"updated":"2026-11-26","files""#,
+            file("showcase/1.png", &hash),
+            file("showcase/about.md", &hash)
+        ),
+    );
+    assert!(Catalog::parse(with_showcase.as_bytes()).is_ok());
     for text in bad {
         assert!(Catalog::parse(text.as_bytes()).is_err(), "{text}");
     }

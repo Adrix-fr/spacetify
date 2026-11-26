@@ -60,7 +60,9 @@ cd apps/desktop && npm run check
   request's text reaches the workflow through environment variables and
   files, never inside a command line or `${{ }}` in a script.
 - **The gallery list matches the files.** `gallery/index.json` gives the
-  SHA-256 of every file of every mod it lists. When you change one of those
+  SHA-256 of every file of every mod it lists, its `showcase/` folder
+  included (pictures and texts for the gallery page, never installed: see
+  `crates/core/src/gallery/showcase.rs`). When you change one of those
   files (the examples are in it), update its hash: a test
   (`the_official_list_matches_the_files_in_the_repository`) fails until you do.
 - **Tests never touch a real Spotify install.** Use the fixtures in

@@ -194,6 +194,34 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   display:flex;flex-direction:column;gap:12px}
 .stg-checks .stg-row{gap:10px;color:#c8c8cc}
 .stg-checks .stg-icon{color:#4cc38a;margin-top:3px}
+.stg-shot{display:block;width:100%;height:100%;object-fit:cover;background:#1f1f22}
+.stg-coverart{display:block;width:100%;height:150px;padding:0;border:0;background:#1f1f22;overflow:hidden;cursor:pointer}
+.stg-coverart .stg-shot{transition:transform .3s}
+.stg-card:hover .stg-coverart .stg-shot{transform:scale(1.03)}
+.stg-tags{display:flex;gap:6px;flex-wrap:wrap}
+.stg-tag{height:22px;padding:0 9px;border-radius:11px;background:#232327;color:#a1a1a6;font-size:11px;font-weight:700;
+  display:inline-flex;align-items:center}
+.stg-shots{flex:1 1 380px;max-width:640px;display:flex;flex-direction:column;gap:10px}
+.stg-shot-main{display:block;width:100%;aspect-ratio:16/9;padding:0;border:0;border-radius:12px;overflow:hidden;
+  background:#1f1f22;cursor:zoom-in}
+.stg-thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.stg-thumb{width:88px;height:52px;padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#1f1f22;opacity:.7}
+.stg-thumb:hover{opacity:1}
+.stg-thumb[aria-pressed="true"]{border-color:#ff6b81;opacity:1}
+.stg-about{margin-top:36px;max-width:760px;color:#c8c8cc;line-height:22px}
+.stg-about h2{font-size:20px;line-height:28px;margin:0 0 12px;color:#ededed}
+.stg-about h3,.stg-about h4,.stg-about h5{color:#ededed;margin:20px 0 8px}
+.stg-about p{margin:0 0 12px}
+.stg-about ul,.stg-about ol{margin:0 0 12px;padding-left:22px}
+.stg-about li{margin-bottom:4px}
+.stg-about code{background:#1f1f22;border-radius:4px;padding:1px 5px;font-size:12px}
+.stg-about pre{background:#161618;border:1px solid rgba(237,237,237,.08);border-radius:8px;padding:12px;overflow:auto;
+  font-size:12px;line-height:18px;margin:0 0 12px}
+.stg-about blockquote{margin:0 0 12px;padding-left:12px;border-left:3px solid #3a3a3f;color:#a1a1a6}
+.stg-about a{color:#ff8a9b}
+.stg-lightbox{position:absolute;inset:0;z-index:4;background:rgba(14,14,15,.94);display:flex;align-items:center;
+  justify-content:center;padding:32px;cursor:zoom-out}
+.stg-lightbox .stg-shot{width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;background:none}
 `;
 
   // -------------------------------------------------------------- state
@@ -203,6 +231,9 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     tab: "themes",
     query: "",
     detail: null,
+    // Picture shown large on the detail page, and the one shown full size.
+    detailImage: 0,
+    lightbox: null,
     loading: false,
     data: null,
     serviceDown: false,
@@ -333,6 +364,180 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     }
   };
 
+  // ----------------------------------------------------------- showcase
+
+  // Pictures and texts of a mod's showcase. The service downloads each file
+  // once, checks its fingerprint and gives pictures as data: URLs, so the
+  // page never loads anything from the web itself.
+  const showcaseFiles = new Map();
+  const showcaseFile = (mod, name) => {
+    const key = `${mod.id}@${mod.version}/${name}`;
+    let answer = showcaseFiles.get(key);
+    if (!answer) {
+      answer = call(`/v1/showcase?id=${encodeURIComponent(mod.id)}&file=${encodeURIComponent(name)}`);
+      showcaseFiles.set(key, answer);
+      answer.catch(() => showcaseFiles.delete(key));
+    }
+    return answer;
+  };
+
+  // Card pictures are only fetched once they come near the screen: after
+  // each change of the page and while it scrolls, the waiting ones that are
+  // close to the window are started.
+  const waiting = new Map();
+  const startVisible = () => {
+    for (const [img, start] of waiting) {
+      if (!img.isConnected) {
+        waiting.delete(img);
+        continue;
+      }
+      const rect = img.getBoundingClientRect();
+      if (rect.top < window.innerHeight + 300 && rect.bottom > -300) {
+        waiting.delete(img);
+        start();
+      }
+    }
+  };
+  let lookQueued = false;
+  const lookSoon = () => {
+    if (lookQueued) return;
+    lookQueued = true;
+    setTimeout(
+      safe(() => {
+        lookQueued = false;
+        startVisible();
+      }),
+      60,
+    );
+  };
+
+  const picture = (mod, name, later) => {
+    const img = h("img", { class: "stg-shot", alt: "", decoding: "async", draggable: "false" });
+    const start = () =>
+      showcaseFile(mod, name).then(
+        safe((answer) => {
+          if (answer && typeof answer.data === "string" && answer.data.startsWith("data:image/")) img.src = answer.data;
+        }),
+        () => {},
+      );
+    if (later) {
+      waiting.set(img, start);
+      lookSoon();
+    } else {
+      start();
+    }
+    return img;
+  };
+
+  const imagesOf = (mod) => (mod.showcase && Array.isArray(mod.showcase.images) ? mod.showcase.images : []);
+  const tagsOf = (mod) => (mod.showcase && Array.isArray(mod.showcase.tags) ? mod.showcase.tags : []);
+
+  const tags = (mod, max) => {
+    const list = tagsOf(mod).slice(0, max);
+    return list.length ? h("div", { class: "stg-tags" }, list.map((tag) => h("span", { class: "stg-tag" }, tag))) : null;
+  };
+
+  // Bold, italics, code and https links. Everything is built as elements:
+  // the text of a mod is never read as HTML.
+  const inline = (text) => {
+    const out = [];
+    const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((https:\/\/[^)\s]+)\)|\*([^*\s][^*]*)\*|_([^_\s][^_]*)_/g;
+    let last = 0;
+    let match;
+    while ((match = pattern.exec(text))) {
+      if (match.index > last) out.push(text.slice(last, match.index));
+      if (match[1]) out.push(h("strong", {}, match[1]));
+      else if (match[2]) out.push(h("code", {}, match[2]));
+      else if (match[3])
+        out.push(h("a", { href: match[4], target: "_blank", rel: "noopener noreferrer", title: match[4] }, match[3]));
+      else out.push(h("em", {}, match[5] || match[6]));
+      last = pattern.lastIndex;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  };
+
+  // A small part of Markdown: titles, paragraphs, lists, quotes and code.
+  const markdown = (text) => {
+    const blocks = [];
+    let paragraph = [];
+    let list = null;
+    let code = null;
+    const endParagraph = () => {
+      if (paragraph.length) blocks.push(h("p", {}, inline(paragraph.join(" "))));
+      paragraph = [];
+    };
+    for (const raw of String(text).replace(/\r/g, "").split("\n")) {
+      if (code) {
+        if (raw.trim().startsWith("```")) {
+          blocks.push(h("pre", {}, code.join("\n")));
+          code = null;
+        } else code.push(raw);
+        continue;
+      }
+      const line = raw.trim();
+      if (line.startsWith("```")) {
+        endParagraph();
+        list = null;
+        code = [];
+        continue;
+      }
+      if (!line) {
+        endParagraph();
+        list = null;
+        continue;
+      }
+      const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+      if (heading) {
+        endParagraph();
+        list = null;
+        blocks.push(h(`h${heading[1].length + 2}`, {}, inline(heading[2])));
+        continue;
+      }
+      const item = /^(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
+      if (item) {
+        endParagraph();
+        if (!list) {
+          list = h(/^\d/.test(line) ? "ol" : "ul");
+          blocks.push(list);
+        }
+        list.append(h("li", {}, inline(item[1])));
+        continue;
+      }
+      if (line.startsWith(">")) {
+        endParagraph();
+        list = null;
+        blocks.push(h("blockquote", {}, inline(line.replace(/^>\s?/, ""))));
+        continue;
+      }
+      list = null;
+      paragraph.push(line);
+    }
+    if (code) blocks.push(h("pre", {}, code.join("\n")));
+    endParagraph();
+    return blocks;
+  };
+
+  const about = (mod) => {
+    const showcase = mod.showcase || {};
+    const name = french() && showcase.about_fr ? "about.fr.md" : showcase.about ? "about.md" : showcase.about_fr ? "about.fr.md" : null;
+    if (!name) return null;
+    const body = h("div", {}, h("p", { style: "color:#85858b" }, t("Loading…", "Chargement…")));
+    showcaseFile(mod, name).then(
+      safe((answer) => body.replaceChildren(...markdown(answer && typeof answer.text === "string" ? answer.text : ""))),
+      () => body.replaceChildren(h("p", { style: "color:#85858b" }, t("This text cannot be shown right now.", "Ce texte ne peut pas s'afficher pour l'instant."))),
+    );
+    return h("section", { class: "stg-about" }, h("h2", {}, t("About", "À propos")), body);
+  };
+
+  const day = (text) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text || "")) return "";
+    const date = new Date(`${text}T00:00:00Z`);
+    return Number.isNaN(date.getTime())
+      ? ""
+      : date.toLocaleDateString(french() ? "fr-FR" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  };
+
   // -------------------------------------------------------------- views
 
   const preview = (colors, big) => {
@@ -414,27 +619,37 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   const card = (mod) => {
     const openDetail = () => {
       state.detail = mod.id;
+      state.detailImage = 0;
       render();
     };
     const error = state.errors.get(mod.id);
+    const cover = imagesOf(mod)[0];
     return h(
       "div",
       { class: "stg-card" },
-      isTheme(mod) && mod.preview ? preview(mod.preview, false) : null,
+      cover
+        ? h(
+            "button",
+            { class: "stg-coverart", "aria-label": `${t("See", "Voir")} ${mod.name}`, onclick: openDetail },
+            picture(mod, cover, true),
+          )
+        : isTheme(mod) && mod.preview
+          ? preview(mod.preview, false)
+          : null,
       h(
         "div",
         { class: "stg-body" },
         h(
           "div",
           { class: "stg-row" },
-          isTheme(mod) ? null : h("span", { class: "stg-letter", "aria-hidden": "true" }, (mod.name || "?").charAt(0)),
+          isTheme(mod) || cover ? null : h("span", { class: "stg-letter", "aria-hidden": "true" }, (mod.name || "?").charAt(0)),
           h(
             "div",
             { style: "flex:1;min-width:0;display:flex;flex-direction:column;gap:2px" },
             h(
               "div",
               { style: "display:flex;align-items:baseline;gap:8px;flex-wrap:wrap" },
-              isTheme(mod)
+              mod.in_gallery || isTheme(mod)
                 ? h("button", { class: "stg-name", onclick: openDetail }, mod.name)
                 : h("span", { class: "stg-name" }, mod.name),
               h("span", { class: "stg-meta" }, `v${mod.version}`),
@@ -443,9 +658,54 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
           ),
         ),
         h("p", { class: "stg-desc" }, description(mod)),
+        tags(mod, 3),
         error ? h("p", { class: "stg-error", role: "alert" }, error) : null,
         h("div", { class: "stg-foot" }, h("span", { class: "stg-meta" }, kindLabel(mod)), actions(mod)),
       ),
+    );
+  };
+
+  // The pictures of the detail page: one large, the others small below.
+  const shots = (mod) => {
+    const images = imagesOf(mod);
+    if (!images.length) return mod.preview ? preview(mod.preview, true) : null;
+    const index = Math.min(state.detailImage, images.length - 1);
+    return h(
+      "div",
+      { class: "stg-shots" },
+      h(
+        "button",
+        {
+          class: "stg-shot-main",
+          "aria-label": t("Show this picture larger", "Voir cette image en grand"),
+          onclick: () => {
+            state.lightbox = { mod, name: images[index] };
+            render();
+          },
+        },
+        picture(mod, images[index], false),
+      ),
+      images.length > 1
+        ? h(
+            "div",
+            { class: "stg-thumbs" },
+            images.map((name, i) =>
+              h(
+                "button",
+                {
+                  class: "stg-thumb",
+                  "aria-pressed": i === index ? "true" : "false",
+                  "aria-label": `${t("Picture", "Image")} ${i + 1}`,
+                  onclick: () => {
+                    state.detailImage = i;
+                    render();
+                  },
+                },
+                picture(mod, name, false),
+              ),
+            ),
+          )
+        : null,
     );
   };
 
@@ -468,17 +728,23 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
       h(
         "div",
         { class: "stg-detail" },
-        mod.preview ? preview(mod.preview, true) : null,
+        shots(mod),
         h(
           "div",
           { class: "stg-detail-text" },
           h(
             "div",
             { style: "display:flex;flex-direction:column;gap:4px" },
-            h("span", { class: "stg-meta", style: "font-weight:700" }, t("Theme", "Thème")),
+            h("span", { class: "stg-meta", style: "font-weight:700" }, isTheme(mod) ? t("Theme", "Thème") : t("Extension", "Extension")),
             h("h2", { class: "stg-title", style: "margin:0" }, mod.name),
-            h("span", { style: "color:#a1a1a6" }, `${t("by", "par")} ${mod.author} · ${t("version", "version")} ${mod.version}`),
+            h(
+              "span",
+              { style: "color:#a1a1a6" },
+              `${t("by", "par")} ${mod.author} · ${t("version", "version")} ${mod.version}`,
+              day(mod.updated) ? ` · ${t("updated", "mis à jour le")} ${day(mod.updated)}` : "",
+            ),
           ),
+          tags(mod, 6),
           h("p", { style: "margin:0;color:#c8c8cc;line-height:22px" }, description(mod)),
           state.errors.get(mod.id) ? h("p", { class: "stg-error", role: "alert" }, state.errors.get(mod.id)) : null,
           h(
@@ -500,12 +766,16 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
                 { class: "stg-checks" },
                 h("span", { style: "font-weight:700" }, t("Before installing, spacetify checks that:", "Avant d'installer, spacetify vérifie que :")),
                 [
-                  t("this theme is in spacetify's official list;", "ce thème fait partie de la liste officielle de spacetify ;"),
+                  isTheme(mod)
+                    ? t("this theme is in spacetify's official list;", "ce thème fait partie de la liste officielle de spacetify ;")
+                    : t("this extension is in spacetify's official list;", "cette extension fait partie de la liste officielle de spacetify ;"),
                   t(
                     "the files received are exactly the ones that were accepted (their fingerprint is compared);",
                     "les fichiers reçus sont exactement ceux qui ont été acceptés (leur empreinte est comparée) ;",
                   ),
-                  t("it is a valid spacetify theme.", "c'est un thème spacetify valide."),
+                  isTheme(mod)
+                    ? t("it is a valid spacetify theme.", "c'est un thème spacetify valide.")
+                    : t("it is a valid spacetify extension.", "c'est une extension spacetify valide."),
                 ].map((line) => h("div", { class: "stg-row" }, icon(ICONS.check), h("span", {}, line))),
                 h(
                   "span",
@@ -519,6 +789,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
             : null,
         ),
       ),
+      about(mod),
     );
 
   const empty = (iconMarkup, title, text, retry) =>
@@ -620,7 +891,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
       if (state.tab === "extensions" && !(mod.kind === "extension" && mod.in_gallery)) return false;
       if (state.tab === "installed" && !mod.installed) return false;
       if (!query) return true;
-      return `${mod.name} ${mod.author} ${description(mod)}`.toLowerCase().includes(query);
+      return `${mod.name} ${mod.author} ${description(mod)} ${tagsOf(mod).join(" ")}`.toLowerCase().includes(query);
     });
   };
 
@@ -682,7 +953,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
         ),
       ),
     );
-    const scroll = h("div", { class: "stg-scroll" });
+    const scroll = h("div", { class: "stg-scroll", onscroll: lookSoon });
     root.append(scroll);
 
     if (state.serviceDown) {
@@ -784,6 +1055,21 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
         ),
       );
     }
+    if (state.lightbox && shown) {
+      const hide = () => {
+        state.lightbox = null;
+        render();
+      };
+      root.append(
+        h(
+          "div",
+          { class: "stg-lightbox", role: "dialog", "aria-label": t("Picture", "Image"), onclick: hide },
+          picture(state.lightbox.mod, state.lightbox.name, false),
+        ),
+      );
+    } else {
+      state.lightbox = null;
+    }
     if (state.restarting) {
       root.append(
         h(
@@ -839,10 +1125,15 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
       width: `${window.innerWidth - 16}px`,
       height: `${window.innerHeight - top - 8}px`,
     });
+    lookSoon();
   };
 
   const onKey = (event) => {
-    if (event.key === "Escape" && state.open && !state.restarting) close();
+    if (event.key !== "Escape" || !state.open || state.restarting) return;
+    if (state.lightbox) {
+      state.lightbox = null;
+      render();
+    } else close();
   };
 
   let openedAt = "";
@@ -865,6 +1156,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     if (!state.open) return;
     state.open = false;
     state.detail = null;
+    state.lightbox = null;
     window.removeEventListener("resize", place);
     document.removeEventListener("keydown", onKey);
     if (root) root.remove();

@@ -176,6 +176,12 @@ The only way to get that is to reach into Spotify's internal code, which is
 exactly what breaks with every update. If a reliable way appears, it will be
 added; until then, extensions work with what is on screen.
 
+## Showing your mod in the gallery
+
+An optional `showcase/` folder gives your extension pictures, a longer
+description and tags in the gallery. It works exactly as for themes: see
+[Showing your mod in the gallery](themes.md#showing-your-mod-in-the-gallery).
+
 ## Coming from Spicetify
 
 Spicetify extensions use `Spicetify.Player`, `Spicetify.Platform` and React,

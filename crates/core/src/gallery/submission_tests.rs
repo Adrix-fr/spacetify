@@ -255,6 +255,51 @@ fn adds_a_new_mod_then_its_update() {
 }
 
 #[test]
+fn the_showcase_is_listed_apart_and_the_day_is_written() {
+    let repo = repo();
+    let form = Form::parse(BODY).unwrap();
+    let mod_dir = aurora("1.0.0");
+    let png: &[u8] = b"\x89PNG\r\n\x1a\nthe picture";
+    let folder = mod_dir.path().join("showcase");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("1-home.png"), png).unwrap();
+    fs::write(folder.join("about.md"), "# Aurora").unwrap();
+    fs::write(folder.join("showcase.toml"), "tags = [\"dark\", \"green\"]").unwrap();
+    add(mod_dir.path(), repo.path(), "lina-dev", &form).unwrap();
+
+    let catalog = read_catalog(repo.path()).unwrap();
+    let entry = catalog.get("aurora").unwrap();
+    assert_eq!(entry.files.len(), 3, "the showcase is not part of the mod");
+    let showcase = entry.showcase.as_ref().unwrap();
+    assert_eq!(showcase.images[0].path, "showcase/1-home.png");
+    assert_eq!(showcase.images[0].sha256, sha256_hex(png));
+    assert_eq!(showcase.about.as_ref().unwrap().path, "showcase/about.md");
+    assert_eq!(showcase.tags, ["dark", "green"]);
+    assert!(
+        repo.path()
+            .join("gallery/mods/aurora/showcase/1-home.png")
+            .is_file()
+    );
+    assert!(super::super::is_date(entry.updated.as_deref().unwrap()));
+
+    // A bad showcase refuses the whole mod, before anything is copied.
+    let bad = aurora("1.1.0");
+    fs::create_dir_all(bad.path().join("showcase")).unwrap();
+    fs::write(bad.path().join("showcase/1.png"), b"not a picture").unwrap();
+    let mut update = form;
+    update.version = "1.1.0".into();
+    assert!(add(bad.path(), repo.path(), "lina-dev", &update).is_err());
+    assert_eq!(
+        read_catalog(repo.path())
+            .unwrap()
+            .get("aurora")
+            .unwrap()
+            .version,
+        "1.0.0"
+    );
+}
+
+#[test]
 fn the_form_must_match_the_files() {
     let repo = repo();
     let mut form = Form::parse(BODY).unwrap();

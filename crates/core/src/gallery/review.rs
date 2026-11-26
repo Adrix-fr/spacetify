@@ -20,7 +20,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use super::sha256_hex;
+use super::{sha256_hex, showcase};
 use crate::Lang;
 use crate::mods::{self, ModKind, extension, theme};
 use crate::service::Text;
@@ -429,6 +429,18 @@ pub fn review(dir: &Path, previous: Option<&Path>) -> Report {
         }),
     }
 
+    if let Err(err) = showcase::read(dir) {
+        let text = Text::of_error(&err);
+        report.findings.push(Finding {
+            check: Check::Files,
+            level: Level::Block,
+            what: text,
+            file: Some(showcase::DIR.to_owned()),
+            line: None,
+            excerpt: None,
+        });
+    }
+
     let scanned = scan_dir(dir, report.kind);
     report.files = scanned.files;
     report.findings.extend(scanned.findings);
@@ -569,6 +581,22 @@ pub fn is_note(path: &str) -> bool {
 fn expected(path: &str, kind: Option<ModKind>) -> Option<Expected> {
     if is_note(path) {
         return Some(Expected::Text(TextKind::Notes));
+    }
+    // The showcase: pictures and texts for the gallery page only.
+    if let Some(name) = path.strip_prefix("showcase/") {
+        if name.contains('/') {
+            return None;
+        }
+        return match name {
+            showcase::ABOUT | showcase::ABOUT_FR => Some(Expected::Text(TextKind::Notes)),
+            showcase::MANIFEST => Some(Expected::Text(TextKind::Toml)),
+            _ => match showcase::image_type(name)? {
+                "image/png" => Some(Expected::Png),
+                "image/jpeg" => Some(Expected::Jpeg),
+                "image/gif" => Some(Expected::Gif),
+                _ => Some(Expected::Webp),
+            },
+        };
     }
     let theme_files = [theme::MANIFEST, theme::CSS_FILE, theme::COLORS_FILE];
     let extension_files = [extension::MANIFEST, extension::SCRIPT];

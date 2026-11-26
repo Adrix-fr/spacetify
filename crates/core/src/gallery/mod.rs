@@ -20,6 +20,7 @@
 mod link;
 pub mod review;
 pub mod server;
+pub mod showcase;
 pub mod submission;
 
 use std::collections::BTreeMap;
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub use link::Link;
+pub use showcase::Showcase;
 
 use crate::config::{AppDirs, Config};
 use crate::mods::{self, Installed, Loaded, ModKind, ModStore, manifest};
@@ -81,6 +83,27 @@ pub struct Entry {
     /// Colours of the preview, for themes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<Preview>,
+    /// Pictures, longer description and tags: see [`showcase`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub showcase: Option<Showcase>,
+    /// Day this version entered the gallery, as `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<String>,
+}
+
+/// True for a day written `YYYY-MM-DD`.
+pub fn is_date(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(i, b)| match i {
+            4 | 7 => *b == b'-',
+            _ => b.is_ascii_digit(),
+        })
+}
+
+/// Today, as `YYYY-MM-DD` (UTC).
+pub fn today() -> String {
+    humantime::format_rfc3339(std::time::SystemTime::now()).to_string()[..10].to_owned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,6 +199,17 @@ impl Catalog {
                     .all(|color| mods::theme::is_hex_color(color))
             {
                 return Err(invalid(format!("bad preview colour in `{id}`")));
+            }
+            if let Some(showcase) = &entry.showcase {
+                showcase
+                    .check()
+                    .map_err(|reason| invalid(format!("{reason} in `{id}`")))?;
+                if showcase.files().any(|f| names.contains(f.path.as_str())) {
+                    return Err(invalid(format!("repeated file in `{id}`")));
+                }
+            }
+            if entry.updated.as_deref().is_some_and(|day| !is_date(day)) {
+                return Err(invalid(format!("bad date in `{id}`")));
             }
         }
         Ok(catalog)
@@ -376,6 +410,52 @@ fn download(source: &Source, entry: &Entry, dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Where showcase files are kept once downloaded, named by their hash.
+pub fn showcase_cache_dir(dirs: &AppDirs) -> PathBuf {
+    dirs.data_dir.join("gallery").join("showcase")
+}
+
+/// The file `name` of the showcase of `entry`, checked against the hash in
+/// the list. Kept on disk, so it is downloaded once only.
+pub fn showcase_file(
+    source: &Source,
+    dirs: &AppDirs,
+    entry: &Entry,
+    name: &str,
+) -> Result<Vec<u8>> {
+    let file = entry
+        .showcase
+        .as_ref()
+        .and_then(|showcase| showcase.file(name))
+        .ok_or_else(|| Error::NotInGallery(format!("{}/{name}", entry.id)))?;
+    let cached = showcase_cache_dir(dirs).join(&file.sha256);
+    if let Ok(bytes) = fs::read(&cached)
+        && sha256_hex(&bytes) == file.sha256
+    {
+        return Ok(bytes);
+    }
+    let bytes = source.get(
+        &format!("{}/{}", entry.path, file.path),
+        showcase::MAX_IMAGE,
+    )?;
+    if sha256_hex(&bytes) != file.sha256 {
+        return Err(Error::GalleryFileMismatch {
+            id: entry.id.clone(),
+            file: file.path.clone(),
+        });
+    }
+    let kept = cached
+        .parent()
+        .map_or(Ok(()), |dir| {
+            fs::create_dir_all(dir).map_err(Error::io(dir))
+        })
+        .and_then(|()| crate::backup::write_atomic(&cached, &bytes));
+    if let Err(err) = kept {
+        tracing::warn!("could not keep a showcase file: {err}");
+    }
+    Ok(bytes)
+}
+
 fn remove_dir(dir: &Path) -> Result<()> {
     match fs::remove_dir_all(dir) {
         Err(err) if err.kind() != std::io::ErrorKind::NotFound => Err(Error::io(dir)(err)),
@@ -402,6 +482,31 @@ pub struct ModView {
     /// The gallery has another version than the installed one.
     pub update: bool,
     pub code_url: Option<String>,
+    pub showcase: Option<ShowcaseView>,
+    /// Day this version entered the gallery, as `YYYY-MM-DD`.
+    pub updated: Option<String>,
+}
+
+/// What the page needs to show a showcase. Files are named as inside
+/// `showcase/`, and fetched one by one with `GET /v1/showcase`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShowcaseView {
+    pub images: Vec<String>,
+    pub about: bool,
+    pub about_fr: bool,
+    pub tags: Vec<String>,
+}
+
+impl ShowcaseView {
+    fn of(showcase: &Showcase) -> Self {
+        let name = |file: &FileEntry| file.path.trim_start_matches("showcase/").to_owned();
+        Self {
+            images: showcase.images.iter().map(name).collect(),
+            about: showcase.about.is_some(),
+            about_fr: showcase.about_fr.is_some(),
+            tags: showcase.tags.clone(),
+        }
+    }
 }
 
 /// The gallery's mods, then installed mods that are not in it.
@@ -432,6 +537,8 @@ pub fn views(
             installed,
             active: local.is_some_and(|l| l.active),
             code_url: source.code_url(entry),
+            showcase: entry.showcase.as_ref().map(ShowcaseView::of),
+            updated: entry.updated.clone(),
         });
     }
     for local in &listed {
@@ -460,6 +567,8 @@ pub fn views(
             active: local.active,
             update: false,
             code_url: None,
+            showcase: None,
+            updated: None,
         });
     }
     Ok(views)
