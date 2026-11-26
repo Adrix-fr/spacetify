@@ -1,0 +1,6 @@
+id = "robot-test-hello"
+name = "Robot test Hello"
+version = "1.0.0"
+author = "Robot test"
+description = "A test extension to refuse."
+spacetify = ">=0.4.0"

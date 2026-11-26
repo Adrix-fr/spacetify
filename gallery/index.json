@@ -51,6 +51,25 @@
           "sha256": "0c3c1b50c26d40e88ef9d24e9b988a848d25bc59d98dd910309e0ed49cc05535"
         }
       ]
+    },
+    {
+      "id": "robot-test-hello",
+      "kind": "extension",
+      "name": "Robot test Hello",
+      "author": "Robot test",
+      "version": "1.0.0",
+      "description": "A test extension to refuse.",
+      "path": "gallery/mods/robot-test-hello",
+      "files": [
+        {
+          "path": "extension.toml",
+          "sha256": "6b8e4d08e5a00024c97b621c51a9f8575b5e4f08f9935ce1d1d8376b78d65d89"
+        },
+        {
+          "path": "main.js",
+          "sha256": "5e39b3fff9234c7b1b3a8cb5caf35cceaa66e71abd210edfb0d5bbf51cf3874d"
+        }
+      ]
     }
   ]
 }
