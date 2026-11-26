@@ -1,4 +1,5 @@
-// Builds the Windows installer: `npm run bundle`.
+// Builds the Windows installer: `npm run bundle`. On macOS and Linux, the
+// same command builds their packages (see bundle-unix.mjs).
 //
 // 1. the `spacetify` and `spacetify-service` programs, and the app
 //    (`spacetify-app`, with its web files);
@@ -15,8 +16,10 @@ import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// macOS and Linux get their usual packages instead (bundle-unix.mjs).
 if (process.platform !== "win32") {
-  throw new Error("the installer is built on Windows");
+  await import("./bundle-unix.mjs");
+  process.exit(0);
 }
 
 const here = dirname(fileURLToPath(import.meta.url));

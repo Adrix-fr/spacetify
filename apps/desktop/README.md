@@ -1,6 +1,7 @@
 # Desktop app
 
-The spacetify window, its tray icon and the Windows installer. Built with
+The spacetify window, its tray icon, the Windows installer and the macOS and
+Linux packages. Built with
 [Tauri 2](https://tauri.app) (Rust) and [Svelte 5](https://svelte.dev)
 (interface). Like the CLI, it holds no mod logic of its own: every action
 calls `spacetify-core`.
@@ -25,6 +26,7 @@ apps/desktop/
     mock.ts            a fake Rust side, to see each screen in a browser
   assets/              logo sources (SVG)
   scripts/bundle.mjs   builds the Windows installer
+  scripts/bundle-unix.mjs  builds the macOS and Linux packages
 ```
 
 The installer's Rust side is in [`apps/setup`](../setup).
@@ -117,6 +119,36 @@ the same steps.
 Note: the install folder, `%LOCALAPPDATA%\spacetify`, is also where
 spacetify keeps its backups. The uninstaller only deletes the files it
 installed and never a folder that is not empty, so backups are safe.
+
+## macOS and Linux packages
+
+The same `npm run bundle` builds them, on a Mac or on Linux
+(`scripts/bundle-unix.mjs`). They are each system's usual format, made by
+Tauri, not the Windows installer above:
+
+- macOS: `spacetify.app` in a `.dmg`, universal (Apple Silicon and Intel), in
+  `target/universal-apple-darwin/release/bundle/dmg/`. It needs both Rust
+  targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
+- Linux: a `.deb` and an `.rpm` in `target/release/bundle/`, with the
+  WebKitGTK packages listed in the Tauri prerequisites.
+
+`spacetify` and `spacetify-service` are built first and placed next to the
+app (`Contents/MacOS` in the `.app`, `/usr/bin` on Linux), where the app and
+the service look for each other; the example mods go in its resources. The
+packaging settings are passed to `tauri build` with `--config`, so a normal
+`cargo build` of the app does not need the two programs. The packages run
+nothing at install or uninstall.
+
+The `.app` is signed ad hoc (`signingIdentity: "-"`): without an Apple
+Developer account (paid) it cannot be signed and notarized by Apple, so
+macOS asks for *Open Anyway* the first time. With an account, the
+`APPLE_CERTIFICATE`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`
+and `APPLE_TEAM_ID` variables of `tauri build` would do both.
+
+The CI builds them on every push (artifacts `spacetify-macos` and
+`spacetify-linux`, each with `SHA256SUMS.txt`), opens the `.dmg` and starts
+the app on macOS, and installs the Linux packages on clean Ubuntu 22.04,
+Debian 12 and Fedora containers, where it starts the app too.
 
 ## Signing
 

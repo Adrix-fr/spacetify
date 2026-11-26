@@ -128,3 +128,155 @@ jobs:
         with:
           name: spacetify-windows
           path: out/
+
+  # One universal .dmg (Apple Silicon and Intel), signed ad hoc: no Apple
+  # account, so macOS asks for "Open Anyway" the first time.
+  installer-macos:
+    name: macOS installer
+    runs-on: macos-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Build the installer
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run bundle
+
+      - name: Collect the files
+        run: |
+          mkdir -p out
+          cp target/universal-apple-darwin/release/bundle/dmg/*.dmg out/
+
+      # What a user gets: the app inside the .dmg, for both processors,
+      # signed, with its two programs and the example mods, and it starts.
+      - name: Check the installer
+        run: |
+          set -euo pipefail
+          hdiutil attach out/*.dmg -mountpoint /tmp/spacetify -nobrowse -readonly
+          app=/tmp/spacetify/spacetify.app
+          for exe in spacetify-app spacetify spacetify-service; do
+            archs=$(lipo -archs "$app/Contents/MacOS/$exe")
+            echo "$exe: $archs"
+            [[ "$archs" == *arm64* && "$archs" == *x86_64* ]]
+          done
+          codesign --verify --deep --strict --verbose=2 "$app"
+          "$app/Contents/MacOS/spacetify" --version
+          arch -x86_64 "$app/Contents/MacOS/spacetify" --version
+          ls "$app/Contents/Resources/examples"
+          "$app/Contents/MacOS/spacetify-app" &
+          pid=$!
+          sleep 15
+          kill -0 "$pid"
+          kill "$pid"
+          hdiutil detach /tmp/spacetify
+
+      - name: SHA-256 of every file
+        working-directory: out
+        run: |
+          shasum -a 256 *.dmg > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacetify-macos
+          path: out/
+
+  # A .deb (Ubuntu, Debian, Mint…) and an .rpm (Fedora, openSUSE…). Built on
+  # the oldest Ubuntu GitHub offers, so they also install on older systems.
+  installer-linux:
+    name: Linux packages
+    runs-on: ubuntu-22.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Linux libraries for the desktop app
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+
+      - name: Build the packages
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run bundle
+
+      - name: Collect the files
+        run: |
+          mkdir -p out
+          cp target/release/bundle/deb/*.deb target/release/bundle/rpm/*.rpm out/
+          dpkg-deb --info out/*.deb
+
+      - name: SHA-256 of every file
+        working-directory: out
+        run: |
+          sha256sum *.deb *.rpm > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: spacetify-linux
+          path: out/
+
+  # Installs each package on a clean system, as a user would, then checks
+  # that the programs are in place and that the app starts.
+  linux-install:
+    name: Install on ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: installer-linux
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            install: apt-get update && apt-get install -y ./*.deb xvfb xauth dbus
+          - image: debian:12
+            install: apt-get update && apt-get install -y ./*.deb xvfb xauth dbus
+          - image: fedora:latest
+            install: dnf install -y ./*.rpm /usr/bin/xvfb-run /usr/bin/xauth /usr/bin/dbus-run-session /usr/bin/ldd
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: spacetify-linux
+
+      - name: Check the SHA-256
+        run: sha256sum -c SHA256SUMS.txt
+
+      - name: Install
+        run: ${{ matrix.install }}
+
+      - name: Check the install
+        shell: bash
+        run: |
+          set -euo pipefail
+          spacetify --version
+          test -x /usr/bin/spacetify-service
+          ls /usr/lib/spacetify/examples
+          if ldd /usr/bin/spacetify-app | grep "not found"; then exit 1; fi
+          # Still running after 15 seconds: it started (124 = stopped by timeout).
+          status=0
+          dbus-run-session -- xvfb-run -a timeout 15 spacetify-app || status=$?
+          test "$status" -eq 124

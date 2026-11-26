@@ -20,7 +20,10 @@ itself is described in [apps/desktop/README.md](apps/desktop/README.md).
 
 ## Before opening a pull request
 
-Make sure these pass. CI runs the same checks on Windows, Linux and macOS.
+Make sure these pass. CI runs the same checks on Windows, Linux and macOS,
+then builds the installer of each system (`npm run bundle` in
+`apps/desktop`), installs the Linux packages on clean Ubuntu, Debian and
+Fedora systems and checks that the app starts there and on macOS.
 
 ```sh
 cargo fmt --all
@@ -40,7 +43,9 @@ cd apps/desktop && npm run check
   the installer documents (user `Path`, notification name). The installer
   (`apps/setup`) is per user; it only copies files, makes the shortcuts and
   the uninstall entry, and its other steps live in
-  `crates/core/src/setup.rs`. The
+  `crates/core/src/setup.rs`. The macOS and Linux packages
+  (`apps/desktop/scripts/bundle-unix.mjs`) only hold files, with no script
+  that runs at install. The
   service only uses the file method, never `--live`.
 - **Downloads are the gallery's only.** The only thing spacetify downloads is
   a mod the user installs from the gallery: listed in `gallery/index.json`,

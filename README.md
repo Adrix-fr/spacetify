@@ -5,7 +5,8 @@ A mod manager for the Spotify desktop client, built to survive Spotify updates.
 > **Status: early development (phase 5).** The core, the CLI, themes,
 > extensions, automatic repair after updates and the desktop app with its
 > Windows installer work on Windows. macOS and Linux are supported in the
-> code but untested.
+> code, and the CI builds their packages and checks that they install and
+> start, but they are untested on real computers.
 
 ## Why
 
@@ -47,6 +48,47 @@ It installs for your user only, without admin rights: the app, the
 and the background service. The app sits in the notification area; closing
 its window does not stop the automatic repair. Uninstall it from *Settings >
 Apps*: it offers to put Spotify back first, and keeps your mods and backups.
+
+### macOS
+
+The CI builds a `.dmg` on every push: download the `spacetify-macos`
+artifact from the latest *CI* run (with its `SHA256SUMS.txt`). One file for
+every Mac, Apple Silicon or Intel.
+
+1. Open the `.dmg` and drag *spacetify* into *Applications*. Start it from
+   there: from anywhere else, the automatic repair may not find its service
+   after a restart.
+2. spacetify is not signed by Apple (that needs a paid Apple account), so the
+   first time, macOS says it cannot verify it. Click *Done*, then open
+   *System Settings > Privacy & Security*, scroll down and click *Open
+   Anyway* next to spacetify. macOS remembers it.
+
+The `spacetify` command is inside the app, in
+`/Applications/spacetify.app/Contents/MacOS/spacetify`; the app's *Terminal*
+tab uses it directly. To uninstall, first run `spacetify restore` and
+`spacetify service disable` (in that tab), then move the app to the Trash.
+Your mods and backups stay.
+
+### Linux
+
+The CI builds a `.deb` (Ubuntu, Debian, Linux Mint, Pop!\_OS…) and an `.rpm`
+(Fedora, openSUSE…) on every push: download the `spacetify-linux` artifact
+from the latest *CI* run (with its `SHA256SUMS.txt`). They are for 64-bit
+Intel and AMD processors.
+
+Open the file with your software centre, or in a terminal:
+
+```sh
+sudo apt install ./spacetify_*_amd64.deb   # Ubuntu, Debian, Mint…
+sudo dnf install ./spacetify-*.x86_64.rpm  # Fedora
+```
+
+Like every system package, it asks for your password once, to install the
+app, the `spacetify` command and the background service in `/usr/bin`, the
+example mods in `/usr/lib/spacetify` and the menu entry. spacetify itself
+still runs as your user, without admin rights. To uninstall, first run
+`spacetify restore` and `spacetify service disable`, then remove the
+`spacetify` package. Your mods and backups stay.
 
 ### From source
 
@@ -280,6 +322,10 @@ the usual Start menu and desktop shortcuts and uninstall information
 (`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\spacetify`).
 Uninstalling removes them all.
 
+The macOS and Linux packages add nothing beyond their own files (listed
+under *Install*): no step runs at install or uninstall, which is why
+`spacetify restore` and `spacetify service disable` come first.
+
 To remove spacetify completely: uninstall the app (or run `spacetify restore`,
 then `spacetify service disable`), then delete the folders above.
 
@@ -372,7 +418,9 @@ software. To keep that rare, spacetify:
 Planned for releases: programs built by GitHub Actions and signed through the
 [SignPath Foundation](https://signpath.org) (free signing for open-source
 projects), with the SHA-256 of every file published next to it. The CI is
-ready for it and already publishes `SHA256SUMS.txt` with the installer.
+ready for it and already publishes `SHA256SUMS.txt` with every installer
+(Windows, macOS and Linux). On macOS, the app is only signed ad hoc for now:
+Apple's own signature and notarization need a paid Apple account.
 
 If Microsoft Defender flags spacetify, you can report a false positive at
 <https://www.microsoft.com/wdsi/filesubmission>.
