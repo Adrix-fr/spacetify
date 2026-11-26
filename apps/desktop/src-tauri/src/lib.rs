@@ -2,6 +2,7 @@
 //! `spacetify_core`, like the CLI. It holds no mod logic of its own.
 
 mod commands;
+mod leave;
 mod model;
 mod state;
 mod submit;
@@ -64,6 +65,8 @@ pub fn run() {
             commands::service_check,
             commands::get_settings,
             commands::set_language,
+            leave::spicetify_plan,
+            leave::leave_spicetify,
             submit::take_start_page,
             submit::submit_candidates,
             submit::submit_review,

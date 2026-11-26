@@ -214,9 +214,15 @@ promise. Callbacks and promises are isolated like the rest of the API.
 spacetify finds it by what it can do, never by the generated names in
 Spotify's code, and changes nothing in Spotify. Your extension only sees
 spacetify's API above: if a Spotify update moves the player, spacetify is
-fixed in one place and your extension keeps working unchanged. Until then,
-`available` is `false` and `togglePlay`, `next` and `previous` still work
-through the player's buttons; the other actions reject with a clear error.
+fixed in one place and your extension keeps working unchanged.
+
+**Plan B.** Until then, `available` is `false` and the player works through
+what is on screen: its buttons and bars, found by their `data-testid`.
+`state()` (track, artists, album, cover, position, duration, playing,
+shuffle, repeat), the change, track and volume events, `play`, `pause`,
+`togglePlay`, `next`, `previous`, `seek`, `setShuffle`, `setRepeat`,
+`getVolume` and `setVolume` keep working. Only `playUri` and the queue
+reject, with a clear error. `ready()` resolves either way.
 
 ### `spacetify.ui`
 

@@ -1,6 +1,12 @@
 # spacetify
 
-A mod manager for the Spotify desktop client, built to survive Spotify updates.
+**Your theme will never disappear after a Spotify update again.**
+
+A mod manager for the Spotify desktop client, built to survive Spotify
+updates: when Spotify updates itself and wipes the mods, spacetify puts them
+back on its own, without a command to type. Coming from Spicetify? One click
+moves you over, your themes included (see
+[Leaving Spicetify](#leaving-spicetify)).
 
 > **Status: early development (phase 5).** The core, the CLI, themes,
 > extensions, automatic repair after updates and the desktop app with its
@@ -33,6 +39,11 @@ spacetify takes a different approach:
   and mods are validated before anything is injected.
 - **Repairs itself after updates.** An optional background service notices
   when a Spotify update removes the mods and puts them back.
+- **Safe mode.** Every mod of the gallery goes through the ClamAV antivirus
+  and a robot that looks for hidden, scrambled or risky code, then is read
+  and accepted by the spacetify team. It shows as *Verified* in the gallery
+  and in the app; a mod installed by hand, or changed since, shows as *Not
+  verified*.
 
 ## Install
 
@@ -130,6 +141,7 @@ Run `spacetify` on its own to open the interactive menu (arrow keys, Enter,
 | `spacetify disable ID`    | Turn an extension or the active theme off          |
 | `spacetify theme ID`      | Choose the active theme (`none` for Spotify's own) |
 | `spacetify doctor`        | Check the active mods against the installed Spotify |
+| `spacetify leave-spicetify` | Move from Spicetify to spacetify, see below      |
 | `spacetify new KIND ID`   | Create a theme or an extension, ready to edit      |
 | `spacetify dev DIR`       | Run a mod in Spotify, reloaded at each save        |
 | `spacetify service …`     | Automatic repair after updates, see below          |
@@ -219,6 +231,31 @@ Making your own: see [docs/themes.md](docs/themes.md) and
 not work as they are, because they rely on changes Spicetify makes to
 Spotify's code; the guides explain what can be carried over.
 
+### Leaving Spicetify
+
+The app's Home page offers it when Spicetify is found (or run
+`spacetify leave-spicetify`). It shows what will happen first, then in one
+click:
+
+- **Spotify.** If Spicetify modifies it, its original interface comes back
+  from Spicetify's own backup, but only if that backup was made from the
+  installed version of Spotify; otherwise nothing is touched and you are
+  told to run `spicetify restore` or reinstall Spotify. The folders Spicetify
+  unpacked inside Spotify (`Apps/xpui`, `Apps/login`) are removed once Spotify
+  no longer uses them.
+- **Themes.** Every colour scheme of the themes in Spicetify's folder
+  becomes a spacetify theme (ids start with `spicetify-`), and the one
+  Spicetify showed becomes the active theme. Only the colours come along:
+  Spicetify's `user.css` relies on changes it makes to Spotify's code. A
+  theme chosen in Spicetify's Marketplace lives in Spotify's page, not in a
+  file: the gallery imports its colours the next time Spotify starts.
+- **Extensions.** Those with an equivalent in the gallery (Full App Display,
+  Trashbin, Bookmark…) are installed from it and turned on; the others are
+  listed. Spicetify's Marketplace is replaced by the gallery.
+- Then the mods are applied and Spotify opens again.
+
+Spicetify itself stays installed, unused: none of its own files are deleted.
+
 ### Automatic repair after Spotify updates
 
 A Spotify update replaces its interface file, which removes the mods. The
@@ -281,7 +318,8 @@ back a few seconds later. `spacetify service events` shows each step.
 
 - Nothing is modified while Spotify is running. You are offered to close it.
 - If Spicetify has modified Spotify, spacetify changes nothing and explains
-  how to switch. Inactive Spicetify leftovers are reported and left alone.
+  how to switch. Inactive Spicetify leftovers are reported and left alone,
+  until you choose to leave Spicetify (see above).
 - The Microsoft Store and Snap versions are read-only and are detected as such.
 
 ### Live mode

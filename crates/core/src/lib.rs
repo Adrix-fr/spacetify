@@ -17,6 +17,7 @@ pub mod mods;
 pub mod patcher;
 pub mod service;
 pub mod setup;
+pub mod spicetify;
 pub mod spotify;
 
 #[cfg(test)]

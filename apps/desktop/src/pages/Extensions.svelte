@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SafeBadge from "../lib/SafeBadge.svelte";
   import { onMount } from "svelte";
   import { FolderPlus, SlidersHorizontal, Trash2, CircleAlert } from "@lucide/svelte";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -96,7 +97,7 @@
                 <p class="error"><CircleAlert size={14} strokeWidth={1.5} />{ext.error}</p>
               {:else}
                 <p class="sub">{ext.description ?? ""}</p>
-                <p class="meta">{ext.author}</p>
+                <p class="meta">{ext.author} <SafeBadge verified={ext.verified} /></p>
               {/if}
             </div>
             {#if ext.settings.length > 0}

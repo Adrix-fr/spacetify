@@ -74,10 +74,10 @@ export function installMock() {
         return { service, events: events.slice(0, (args as { count?: number }).count ?? 30), log: "C:\\Users\\moi\\AppData\\Local\\spacetify\\service\\service.log" };
       case "list_mods":
         return {
-          themes: [{ id: "midnight", name: "Midnight", version: "1.0.0", author: "spacetify", description: "Deep blue backgrounds with a violet accent.", active: true, error: null, palette: midnight, settings: [] }],
+          themes: [{ id: "midnight", name: "Midnight", version: "1.0.0", author: "spacetify", description: "Deep blue backgrounds with a violet accent.", active: true, error: null, palette: midnight, settings: [], verified: true }],
           extensions: [
             {
-              id: "hello-badge", name: "Hello badge", version: "1.0.0", author: "spacetify", description: "Shows a small badge above the player bar.", active: extOn, error: null, palette: null,
+              id: "hello-badge", name: "Hello badge", version: "1.0.0", author: "spacetify", description: "Shows a small badge above the player bar.", active: extOn, error: null, palette: null, verified: false,
               settings: [
                 { name: "side", label: "Side of the window", kind: "choice", value: "right", default: "right", choices: ["left", "right"], custom: false },
                 { name: "text", label: "Badge text", kind: "string", value: "spacetify ✓", default: "spacetify ✓", choices: [], custom: false },
@@ -136,6 +136,23 @@ export function installMock() {
         return { zip: "C:\\Users\\moi\\Downloads\\aurora-1.0.0.zip", formUrl: "https://github.com/Adrix-fr/spacetify/issues/new" };
       case "take_start_page":
         return null;
+      case "spicetify_plan":
+        return {
+          offered: true,
+          blocked: null,
+          steps: [
+            { label: "Spotify", detail: "Retirer les 2 dossier(s) laissé(s) par Spicetify dans Spotify", tone: "good" },
+            { label: "Sleek · Coral", detail: "Couleurs importées, et choisi comme thème actif", tone: "good" },
+            { label: "fullAppDisplay.js", detail: "Remplacée par « fullscreen » de la galerie, installée pour toi", tone: "good" },
+            { label: "adblock.js", detail: "Pas encore d'équivalent", tone: "none" },
+            { label: "marketplace", detail: "Remplacé par la galerie spacetify, intégrée à Spotify", tone: "good" },
+          ],
+        };
+      case "leave_spicetify":
+        return {
+          message: "Tu as quitté Spicetify. Tes mods ne disparaissent plus après les mises à jour de Spotify.",
+          detail: "1 thème(s) importé(s) · 1 extension(s) installée(s).",
+        };
       default:
         return null;
     }

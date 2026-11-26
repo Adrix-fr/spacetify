@@ -83,6 +83,8 @@ pub enum Command {
         #[arg(long, value_name = "DIR")]
         into: Option<PathBuf>,
     },
+    /// Move from Spicetify to spacetify: repair Spotify, import themes, install equivalents
+    LeaveSpicetify(CloseArgs),
     /// Run a mod in Spotify and reload it each time a file is saved
     Dev {
         /// Folder of the mod
@@ -333,6 +335,10 @@ fn in_french(command: clap::Command) -> clap::Command {
                 .mut_arg("into", |a| {
                     a.help("Où créer son dossier (le dossier courant par défaut)")
                 })
+        })
+        .mut_subcommand("leave-spicetify", |c| {
+            c.about("Passer de Spicetify à spacetify : réparer Spotify, importer les thèmes, installer les équivalents")
+                .mut_arg("yes", |a| a.help("Quitter Spicetify sans demander (Spotify est fermé si besoin)"))
         })
         .mut_subcommand("dev", |c| {
             c.about("Lancer un mod dans Spotify et le recharger à chaque enregistrement d'un fichier")

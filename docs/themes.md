@@ -214,6 +214,10 @@ request.
 
 ## Coming from Spicetify
 
+`spacetify leave-spicetify` (or *Leave Spicetify* on the app's Home page)
+imports the colours of your Spicetify themes for you, following the
+mapping below. To carry a theme over by hand:
+
 - `color.ini` maps well onto `colors.toml`: for example `main` →
   `background-base`, `text` → `text-base`, `subtext` → `text-subdued`,
   `button` → `essential-bright-accent`.

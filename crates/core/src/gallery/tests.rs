@@ -144,6 +144,32 @@ fn installs_from_the_gallery_after_checking_every_file() {
     );
     assert!(views[0].preview.is_some());
     assert_eq!(views[0].code_url, None);
+
+    // Verified while it is exactly what the gallery accepted.
+    assert!(is_verified(&catalog, &store, ModKind::Theme, "midnight"));
+    assert!(!is_verified(
+        &catalog,
+        &store,
+        ModKind::Extension,
+        "midnight"
+    ));
+    assert!(!is_verified(&catalog, &store, ModKind::Theme, "nord"));
+    let main = store
+        .path_of(ModKind::Extension, "hello-badge")
+        .join("main.js");
+    assert!(is_verified(
+        &catalog,
+        &store,
+        ModKind::Extension,
+        "hello-badge"
+    ));
+    fs::write(&main, "alert('changed by hand');").unwrap();
+    assert!(!is_verified(
+        &catalog,
+        &store,
+        ModKind::Extension,
+        "hello-badge"
+    ));
 }
 
 #[test]

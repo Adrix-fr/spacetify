@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Play, RotateCcw, TriangleAlert, CircleAlert, Info } from "@lucide/svelte";
-  import { api, type DoctorView, type EventView } from "../lib/api";
-  import { app, runAction, showError, tr } from "../lib/state.svelte";
+  import { Play, RotateCcw, TriangleAlert, CircleAlert, Info, LogOut } from "@lucide/svelte";
+  import { api, type DoctorView, type EventView, type LeaveView } from "../lib/api";
+  import { app, ask, refreshOverview, runAction, showError, toast, tr, withBusy } from "../lib/state.svelte";
   import ThemePreview from "../lib/ThemePreview.svelte";
 
   let doctor = $state<DoctorView | null>(null);
   let doctorFailed = $state(false);
   let recent = $state<EventView[]>([]);
+  let leave = $state<LeaveView | null>(null);
 
   const overview = $derived(app.overview);
   const spotify = $derived(overview?.spotify);
@@ -50,6 +51,11 @@
 
   async function loadExtras() {
     try {
+      leave = await api.spicetifyPlan();
+    } catch {
+      leave = null;
+    }
+    try {
       recent = (await api.repairInfo(4)).events;
     } catch {
       recent = [];
@@ -70,6 +76,29 @@
   async function act(kind: "apply" | "restore") {
     await runAction(kind);
     loadExtras();
+  }
+
+  async function leaveSpicetify() {
+    if (app.busy) return;
+    const ok = await ask({
+      title: tr("Leave Spicetify?", "Quitter Spicetify ?"),
+      body: tr(
+        "Spotify closes, then opens again with spacetify. Spicetify stays installed but is no longer used: none of its own files are deleted.",
+        "Spotify se ferme, puis se rouvre avec spacetify. Spicetify reste installé mais n'est plus utilisé : aucun de ses fichiers n'est supprimé.",
+      ),
+      confirm: tr("Leave Spicetify", "Quitter Spicetify"),
+      cancel: tr("Cancel", "Annuler"),
+    });
+    if (!ok) return;
+    try {
+      const done = await withBusy(tr("Leaving Spicetify…", "Sortie de Spicetify…"), () => api.leaveSpicetify());
+      toast("good", done.message, { detail: done.detail });
+    } catch (error) {
+      showError(error);
+    } finally {
+      await refreshOverview();
+      loadExtras();
+    }
   }
 
   async function openSpotify() {
@@ -113,7 +142,7 @@
     {#if spotify.error}
       <div class="notice bad"><CircleAlert size={16} strokeWidth={1.5} /><span>{spotify.error}</span></div>
     {/if}
-    {#if spotify.state === "spicetify"}
+    {#if spotify.state === "spicetify" && !leave?.offered}
       <div class="notice warn">
         <TriangleAlert size={16} strokeWidth={1.5} />
         <span
@@ -123,6 +152,36 @@
           )}</span
         >
       </div>
+    {/if}
+    {#if leave?.offered}
+      <section class="card leave">
+        <div class="leave-head">
+          <div>
+            <h2>{tr("Coming from Spicetify?", "Tu viens de Spicetify ?")}</h2>
+            <p class="sub">
+              {tr(
+                "Move to spacetify in one click: your themes come along, and your mods no longer disappear after Spotify updates.",
+                "Passe à spacetify en un clic : tes thèmes te suivent, et tes mods ne disparaissent plus après les mises à jour de Spotify.",
+              )}
+            </p>
+          </div>
+          <button class="btn primary" disabled={!!leave.blocked || !!app.busy} onclick={leaveSpicetify}>
+            <LogOut size={14} strokeWidth={1.5} />{tr("Leave Spicetify", "Quitter Spicetify")}
+          </button>
+        </div>
+        {#if leave.blocked}
+          <div class="notice warn"><TriangleAlert size={16} strokeWidth={1.5} /><span>{leave.blocked}</span></div>
+        {/if}
+        <div class="rows">
+          {#each leave.steps as step (step.label + step.detail)}
+            <div class="row">
+              <span class="dot {step.tone === 'good' ? 'on' : ''}"></span>
+              <span class="label">{step.label}</span>
+              <span class="meta">{step.detail}</span>
+            </div>
+          {/each}
+        </div>
+      </section>
     {/if}
     {#if spotify.updateReplaced}
       <div class="notice warn">
@@ -285,6 +344,26 @@
   }
   .empty {
     padding: 12px 16px;
+  }
+  .leave-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+  }
+  .leave-head h2 {
+    margin-bottom: 4px;
+  }
+  .leave .notice {
+    margin: 0 16px 12px;
+  }
+  .leave .rows {
+    border-top: 1px solid var(--line);
+  }
+  .leave .meta {
+    margin-left: auto;
+    text-align: right;
   }
   @media (max-width: 860px) {
     .grid {

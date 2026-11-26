@@ -1,11 +1,11 @@
 //! One function per subcommand. The logic lives in `spacetify_core`; this
 //! file only talks to the user.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use spacetify_core::backup::BackupStore;
-use spacetify_core::config::Config;
+use spacetify_core::config::{AppDirs, Config};
 use spacetify_core::detect::{self, UiState};
 use spacetify_core::gallery::Link;
 use spacetify_core::mods::ModStore;
@@ -15,7 +15,9 @@ use spacetify_core::spotify::{self, InstallKind, SpotifyInstall};
 use spacetify_core::{Error, Lang, Result, tr};
 
 use crate::args::{Command, InstallerStep};
-use crate::{dev_commands, gallery_commands, mod_commands, service_commands, ui};
+use crate::{
+    dev_commands, gallery_commands, mod_commands, service_commands, spicetify_commands, ui,
+};
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -48,6 +50,16 @@ impl Context {
         Config::load(&self.config_file)
     }
 
+    pub fn dirs(&self) -> AppDirs {
+        AppDirs {
+            config_dir: self.config_dir.clone(),
+            data_dir: self
+                .backups_dir
+                .parent()
+                .map_or_else(|| self.backups_dir.clone(), Path::to_path_buf),
+        }
+    }
+
     pub fn save(&self, config: &Config) -> Result<()> {
         config.save(&self.config_file)
     }
@@ -69,6 +81,7 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
         Command::Doctor => mod_commands::doctor(ctx),
         Command::New { kind, id, into } => dev_commands::new(ctx, kind, &id, into.as_deref()),
         Command::Dev { path, close } => dev_commands::dev(ctx, &path, close.yes),
+        Command::LeaveSpicetify(args) => spicetify_commands::leave(ctx, args.yes),
         Command::Service { action } => service_commands::run(ctx, action),
         Command::Gallery { action } => gallery_commands::run(ctx, action),
         Command::Installer { step } => installer(ctx, step),

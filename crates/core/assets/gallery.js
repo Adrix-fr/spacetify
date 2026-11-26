@@ -89,6 +89,10 @@
       '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a1a1a6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M12 19v.01M3 3l18 18"/></svg>',
     code:
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l-6-6 6-6M15 6l6 6-6 6"/></svg>',
+    shield:
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
+    warning:
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
   };
 
   // ------------------------------------------------------------- styles
@@ -201,6 +205,10 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
 .stg-coverart .stg-shot{transition:transform .3s}
 .stg-card:hover .stg-coverart .stg-shot{transform:scale(1.03)}
 .stg-tags{display:flex;gap:6px;flex-wrap:wrap}
+.stg-safe{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:10px;font-size:11px;font-weight:700;
+  background:rgba(52,211,153,.12);color:#34d399;white-space:nowrap;cursor:default}
+.stg-safe.stg-unverified{background:rgba(229,168,59,.12);color:#e5a83b}
+.stg-safe .stg-icon{display:inline-flex}
 .stg-tag{height:22px;padding:0 9px;border-radius:11px;background:#232327;color:#a1a1a6;font-size:11px;font-weight:700;
   display:inline-flex;align-items:center}
 .stg-shots{flex:1 1 380px;max-width:640px;display:flex;flex-direction:column;gap:10px}
@@ -301,6 +309,40 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
       document.body.appendChild(style);
     }
     style.textContent = css;
+  };
+
+  // After leaving Spicetify with spacetify: the theme its Marketplace
+  // showed lives in this page's storage, not in files. Its colours are sent
+  // to the service, which imports it only if leaving Spicetify asked for it.
+  const importMarketplaceTheme = async () => {
+    let theme;
+    try {
+      const key = localStorage.getItem("marketplace:theme-installed");
+      const raw = key && key.startsWith("marketplace:installed:") ? localStorage.getItem(key) : null;
+      theme = raw ? JSON.parse(raw) : null;
+    } catch {
+      return;
+    }
+    const schemes = theme && theme.schemes && typeof theme.schemes === "object" ? theme.schemes : null;
+    if (!schemes) return;
+    const names = Object.keys(schemes);
+    const name = names.includes(theme.activeScheme) ? theme.activeScheme : names[0];
+    const colors = {};
+    for (const [key, value] of Object.entries(schemes[name] || {})) {
+      if (typeof value === "string" && value.length <= 32 && key.length <= 40) colors[key] = value;
+    }
+    if (!Object.keys(colors).length) return;
+    const title = String((theme.manifest && theme.manifest.name) || theme.title || "").slice(0, 120);
+    let answer;
+    try {
+      answer = await call("/v1/spicetify-theme", { title, scheme: names.length > 1 ? name : null, colors });
+    } catch {
+      return;
+    }
+    if (answer && answer.imported && typeof answer.theme_css === "string") {
+      showTheme(answer.theme_css);
+      log("info", [`imported the Spicetify Marketplace theme as ${answer.imported}`]);
+    }
   };
 
   const act = async (mod, path) => {
@@ -613,6 +655,25 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     );
   };
 
+  // The "safe mode" badge: what went through the gallery's checks, and what did not.
+  const safeBadge = (mod) => {
+    if (mod.in_gallery) {
+      const why = t(
+        "Verified: checked by spacetify's robot and the ClamAV antivirus, and accepted by the spacetify team.",
+        "Vérifié : contrôlé par le robot de spacetify et l'antivirus ClamAV, et accepté par l'équipe spacetify.",
+      );
+      return h("span", { class: "stg-safe", title: why, "aria-label": why }, icon(ICONS.shield), t("Verified", "Vérifié"));
+    }
+    if (mod.installed) {
+      const why = t(
+        "Installed by hand: it did not go through the gallery's checks.",
+        "Installé à la main : il n'est pas passé par les vérifications de la galerie.",
+      );
+      return h("span", { class: "stg-safe stg-unverified", title: why, "aria-label": why }, icon(ICONS.warning), t("Not verified", "Non vérifié"));
+    }
+    return null;
+  };
+
   const kindLabel = (mod) =>
     isTheme(mod)
       ? mod.installed ? t("Theme · installed", "Thème · installé") : t("Theme", "Thème")
@@ -656,7 +717,12 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
                 : h("span", { class: "stg-name" }, mod.name),
               h("span", { class: "stg-meta" }, `v${mod.version}`),
             ),
-            h("span", { class: "stg-meta" }, `${t("by", "par")} ${mod.author}`),
+            h(
+              "div",
+              { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap" },
+              h("span", { class: "stg-meta" }, `${t("by", "par")} ${mod.author}`),
+              safeBadge(mod),
+            ),
           ),
         ),
         h("p", { class: "stg-desc" }, description(mod)),
@@ -739,6 +805,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
             { style: "display:flex;flex-direction:column;gap:4px" },
             h("span", { class: "stg-meta", style: "font-weight:700" }, isTheme(mod) ? t("Theme", "Thème") : t("Extension", "Extension")),
             h("h2", { class: "stg-title", style: "margin:0" }, mod.name),
+            h("div", {}, safeBadge(mod)),
             h(
               "span",
               { style: "color:#a1a1a6" },
@@ -766,7 +833,16 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
             ? h(
                 "div",
                 { class: "stg-checks" },
-                h("span", { style: "font-weight:700" }, t("Before installing, spacetify checks that:", "Avant d'installer, spacetify vérifie que :")),
+                h("span", { style: "font-weight:700" }, t("Safe mode. Before it entered the gallery:", "Mode safe. Avant d'entrer dans la galerie :")),
+                [
+                  t("the ClamAV antivirus scanned every file;", "l'antivirus ClamAV a analysé chaque fichier ;"),
+                  t(
+                    "spacetify's robot looked for hidden, scrambled or risky code and for disguised files;",
+                    "le robot de spacetify a cherché du code caché, brouillé ou risqué et des fichiers déguisés ;",
+                  ),
+                  t("the spacetify team read it and accepted it.", "l'équipe spacetify l'a relu et accepté."),
+                ].map((line) => h("div", { class: "stg-row" }, icon(ICONS.check), h("span", {}, line))),
+                h("span", { style: "font-weight:700;margin-top:8px" }, t("Before installing, spacetify checks that:", "Avant d'installer, spacetify vérifie que :")),
                 [
                   isTheme(mod)
                     ? t("this theme is in spacetify's official list;", "ce thème fait partie de la liste officielle de spacetify ;")
@@ -833,8 +909,8 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
             "p",
             { class: "stg-sub" },
             t(
-              "Themes and extensions picked for spacetify. Every file is checked before it is installed.",
-              "Des thèmes et des extensions choisis pour spacetify. Chaque fichier est vérifié avant d'être installé.",
+              "Safe mode: every mod is scanned by an antivirus and a robot, then accepted by the spacetify team. Every file is checked again before it is installed.",
+              "Mode safe : chaque mod passe à l'antivirus et au robot, puis est accepté par l'équipe spacetify. Chaque fichier est revérifié avant d'être installé.",
             ),
           ),
         ),
@@ -1240,5 +1316,6 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   setTimeout(watch, FLOAT_AFTER_MS + 100);
   window.addEventListener("resize", safe(align));
   placeButton();
+  safe(importMarketplaceTheme)();
   log("info", ["ready"]);
 })

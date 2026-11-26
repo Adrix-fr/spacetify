@@ -82,6 +82,7 @@ export interface SettingView {
 }
 
 export interface ModView {
+  verified: boolean;
   id: string;
   name: string;
   version: string | null;
@@ -176,6 +177,12 @@ export interface ReviewView {
   size: number;
 }
 
+export interface LeaveView {
+  offered: boolean;
+  steps: { label: string; detail: string; tone: "good" | "none" }[];
+  blocked: string | null;
+}
+
 export const api = {
   overview: () => invoke<Overview>("overview"),
   apply: (closeSpotify: boolean) => invoke<Done>("apply", { closeSpotify }),
@@ -196,6 +203,8 @@ export const api = {
   serviceCheck: () => invoke<void>("service_check"),
   getSettings: () => invoke<SettingsView>("get_settings"),
   setLanguage: (language: string) => invoke<void>("set_language", { language }),
+  spicetifyPlan: () => invoke<LeaveView>("spicetify_plan"),
+  leaveSpicetify: () => invoke<Done>("leave_spicetify"),
   runCli: (line: string) => invoke<void>("run_cli", { line }),
   stopCli: () => invoke<void>("stop_cli"),
   takeStartPage: () => invoke<string | null>("take_start_page"),

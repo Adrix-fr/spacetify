@@ -15,6 +15,9 @@
 //! POST /v1/disable     {"id"}
 //! POST /v1/restart     close Spotify, apply the changes, open it again
 //! POST /v1/open-submit open the desktop app on its "Submit" page
+//! POST /v1/spicetify-theme {"title", "scheme", "colors"}: the theme the
+//!                      Spicetify Marketplace showed, imported once after
+//!                      leaving Spicetify with spacetify
 //! ```
 //!
 //! Changes are written to `config.toml` at once. Spotify's own file can only
@@ -247,6 +250,11 @@ fn route(request: &HttpRequest, state: &State) -> Reply {
             service::send(&ServicePaths::new(&state.dirs), Request::ApplyNow).map(|()| json!({})),
         ),
         ("POST", "/v1/open-submit") => Some(open_submit()),
+        ("POST", "/v1/spicetify-theme") => {
+            serde_json::from_slice::<MarketplaceTheme>(&request.body)
+                .ok()
+                .map(|theme| import_marketplace_theme(state, &theme))
+        }
         _ => return Reply::refused(404),
     };
     match result {
@@ -315,6 +323,38 @@ fn same(a: &[u8], b: &[u8]) -> bool {
 #[derive(Deserialize)]
 struct IdBody {
     id: String,
+}
+
+#[derive(Deserialize)]
+struct MarketplaceTheme {
+    title: String,
+    scheme: Option<String>,
+    colors: BTreeMap<String, String>,
+}
+
+/// Imports the Marketplace theme if leaving Spicetify asked for it, and
+/// turns it on, with its CSS to show at once.
+fn import_marketplace_theme(state: &State, theme: &MarketplaceTheme) -> Result<Json> {
+    if theme.colors.len() > 64 || theme.title.len() > 200 {
+        return Err(Error::GalleryInvalid("theme too large".into()));
+    }
+    let _one = state.changing.lock().unwrap_or_else(|e| e.into_inner());
+    let imported = {
+        let _lock = OperationLock::acquire(&state.dirs.backups_dir())?;
+        crate::spicetify::marketplace_theme(
+            &state.dirs,
+            &theme.title,
+            theme.scheme.as_deref(),
+            &theme.colors,
+        )?
+    };
+    let Some(id) = imported else {
+        return Ok(json!({ "imported": null }));
+    };
+    tracing::info!("imported the Spicetify Marketplace theme as {id}");
+    let mut answer = change(state, &id, true)?;
+    answer["imported"] = json!(id);
+    Ok(answer)
 }
 
 /// The value of `key` in a query such as `id=nord&file=1.png`. Only plain
@@ -544,6 +584,51 @@ mod tests {
         assert_eq!(param("file=../theme.css", "file"), None);
         assert_eq!(param("file=.hidden", "file"), None);
         assert_eq!(param("file=", "file"), None);
+    }
+
+    #[test]
+    fn the_marketplace_theme_is_imported_only_after_leaving_spicetify() {
+        let home = tempfile::tempdir().unwrap();
+        let dirs = AppDirs::in_folder(home.path());
+        let state = State {
+            dirs: dirs.clone(),
+            link: link(),
+            source: Source::Folder(home.path().join("no-gallery")),
+            catalog: Mutex::new(None),
+            changing: Mutex::new(()),
+        };
+        let mut post = request(&[
+            ("origin", ORIGIN),
+            ("host", "127.0.0.1:4242"),
+            (TOKEN_HEADER, "0123456789abcdef0123456789abcdef"),
+        ]);
+        post.method = "POST".into();
+        post.path = "/v1/spicetify-theme".into();
+        post.body =
+            br##"{"title":"Comfy","scheme":"Mono","colors":{"main":"101010","button":"#1db954"}}"##
+                .to_vec();
+
+        let reply = route(&post, &state);
+        assert_eq!(reply.status, 200);
+        assert_eq!(reply.body["imported"], Json::Null);
+
+        crate::spicetify::Marker {
+            marketplace_theme_pending: true,
+        }
+        .save(&dirs)
+        .unwrap();
+        let reply = route(&post, &state);
+        assert_eq!(reply.status, 200, "{}", reply.body);
+        assert_eq!(reply.body["imported"], "spicetify-comfy-mono");
+        assert!(
+            reply.body["theme_css"]
+                .as_str()
+                .unwrap()
+                .contains("#1db954")
+        );
+
+        post.body = b"not json".to_vec();
+        assert_eq!(route(&post, &state).status, 400);
     }
 
     #[test]

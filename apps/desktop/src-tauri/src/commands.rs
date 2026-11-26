@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::Value as Json;
 use spacetify_core::detect;
 use spacetify_core::doctor;
-use spacetify_core::gallery::Link;
+use spacetify_core::gallery::{self, Link};
 use spacetify_core::mods::{ModKind, ModStore};
 use spacetify_core::patcher::{self, ApplyOutcome, Payload, RestoreOutcome};
 use spacetify_core::service::autostart;
@@ -25,10 +25,10 @@ use crate::tray;
 
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
 
-type Answer<T> = Result<T, Failure>;
+pub(crate) type Answer<T> = Result<T, Failure>;
 
 /// Runs `job` on a worker thread.
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     job: impl FnOnce() -> Answer<T> + Send + 'static,
 ) -> Answer<T> {
     tauri::async_runtime::spawn_blocking(job)
@@ -36,12 +36,12 @@ async fn blocking<T: Send + 'static>(
         .map_err(|err| Failure::new(None, err.to_string()))?
 }
 
-fn fail(lang: Lang) -> impl Fn(Error) -> Failure {
+pub(crate) fn fail(lang: Lang) -> impl Fn(Error) -> Failure {
     move |err| Failure::of(&err, lang)
 }
 
 /// Tells the window what a long operation is doing.
-fn progress(app: &AppHandle, text: String) {
+pub(crate) fn progress(app: &AppHandle, text: String) {
     let _ = app.emit("progress", text);
 }
 
@@ -280,7 +280,7 @@ fn with_launch_hint(lang: Lang, mut done: Done, restarted: bool) -> Done {
 }
 
 /// Closes Spotify if it runs and the user agreed. Returns whether it did.
-fn close_if_running(app: &AppHandle, lang: Lang, allowed: bool) -> Answer<bool> {
+pub(crate) fn close_if_running(app: &AppHandle, lang: Lang, allowed: bool) -> Answer<bool> {
     if !spotify::is_running().map_err(fail(lang))? {
         return Ok(false);
     }
@@ -331,6 +331,8 @@ pub struct ModView {
     pub error: Option<String>,
     pub palette: Option<Palette>,
     pub settings: Vec<SettingView>,
+    /// Exactly as the gallery accepted it (antivirus, robot, team review).
+    pub verified: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -350,6 +352,8 @@ pub async fn list_mods(app: AppHandle, state: State<'_, Shared>) -> Answer<ModsV
         let config = state.config().map_err(fail(lang))?;
         let store = state.mods();
         let listed = store.list(&config).map_err(fail(lang))?;
+        // The list last seen by the gallery: no download here.
+        let catalog = gallery::load_saved_catalog(&state.dirs);
         let mut themes = Vec::new();
         let mut extensions = Vec::new();
         for item in listed {
@@ -363,6 +367,9 @@ pub async fn list_mods(app: AppHandle, state: State<'_, Shared>) -> Answer<ModsV
                 error: None,
                 palette: None,
                 settings: Vec::new(),
+                verified: catalog.as_ref().is_some_and(|catalog| {
+                    gallery::is_verified(catalog, &store, item.kind, &item.id)
+                }),
             };
             match &item.meta {
                 Ok(meta) => {

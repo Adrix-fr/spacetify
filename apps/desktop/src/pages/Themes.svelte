@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SafeBadge from "../lib/SafeBadge.svelte";
   import { onMount } from "svelte";
   import { FolderPlus, Trash2, CircleAlert } from "@lucide/svelte";
   import { open } from "@tauri-apps/plugin-dialog";
@@ -103,7 +104,7 @@
               {#if theme.error}
                 <p class="meta error">{theme.error}</p>
               {:else}
-                <p class="meta">{theme.author} · {theme.version}</p>
+                <p class="meta">{theme.author} · {theme.version} <SafeBadge verified={theme.verified} /></p>
               {/if}
             </div>
             {#if theme.active}

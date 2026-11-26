@@ -11,6 +11,7 @@ mod interactive;
 mod menu;
 mod mod_commands;
 mod service_commands;
+mod spicetify_commands;
 mod ui;
 
 use std::process::ExitCode;

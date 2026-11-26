@@ -238,7 +238,7 @@
   setTimeout(() => {
     if (!internals.ready) {
       write("warn", null, [
-        "Spotify's player and navigation were not found: spacetify.player only has its basic buttons",
+        "Spotify's player and navigation were not found: spacetify.player works with what is on screen (no queue, no playUri)",
       ]);
     }
   }, INTERNALS_TIMEOUT_MS);
@@ -610,12 +610,195 @@
     }
   });
 
-  // Without Spotify's services, the player's own buttons still work.
+  // ------------------------------------------- plan B: the player on screen
+  //
+  // If Spotify ever hides its services, the player still works through what
+  // is on screen: its buttons and bars, found by their data-testid. Less
+  // can be done (no queue, no playing a URI), but nothing breaks.
+
+  const SCREEN = {
+    bar: '[data-testid="now-playing-bar"]',
+    controls: '[data-testid="player-controls"]',
+    repeat: '[data-testid="control-button-repeat"]',
+    position: '[data-testid="playback-position"]',
+    duration: '[data-testid="playback-duration"]',
+    progress: '[data-testid="playback-progressbar"] [data-testid="progress-bar"]',
+    progressInput: '[data-testid="playback-progressbar"] input[type="range"]',
+    volume: '[data-testid="volume-bar"] [data-testid="progress-bar"]',
+    volumeInput: '[data-testid="volume-bar"] input[type="range"]',
+    title: '[data-testid="now-playing-bar"] [data-testid="context-item-link"]',
+    artists: '[data-testid="now-playing-bar"] a[href*="/artist/"]',
+    cover: '[data-testid="now-playing-bar"] [data-testid="cover-art-image"]',
+  };
+  const MOVING_MS = 1600;
+  const screen = { positionText: null, movedAt: 0, signature: null, trackKey: null, volume: null };
+
   const press = (what) => {
     const button = document.querySelector(BUTTONS[what]);
     if (!button) throw unavailable(`the ${what} button`);
     button.click();
   };
+
+  // A click at `fraction` of a bar's width, as a person would do.
+  const pressBar = (selector, fraction) => {
+    const bar = document.querySelector(selector);
+    const rect = bar && bar.getBoundingClientRect();
+    if (!rect || !rect.width) throw unavailable(`the bar ${selector}`);
+    const x = rect.left + rect.width * Math.max(0, Math.min(1, fraction));
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: rect.top + rect.height / 2,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: 0,
+      buttons: 1,
+    };
+    const up = { ...init, buttons: 0 };
+    bar.dispatchEvent(new PointerEvent("pointerdown", init));
+    bar.dispatchEvent(new MouseEvent("mousedown", init));
+    document.dispatchEvent(new PointerEvent("pointermove", init));
+    bar.dispatchEvent(new PointerEvent("pointerup", up));
+    bar.dispatchEvent(new MouseEvent("mouseup", up));
+    document.dispatchEvent(new PointerEvent("pointerup", up));
+    bar.dispatchEvent(new MouseEvent("click", up));
+  };
+
+  // "3:47", "-3:46" or "1:02:03" in milliseconds.
+  const clock = (text) => {
+    const parts = String(text || "")
+      .replace(/[^0-9:]/g, "")
+      .split(":")
+      .filter(Boolean)
+      .map(Number);
+    return parts.length ? parts.reduce((total, part) => total * 60 + part, 0) * 1000 : null;
+  };
+
+  // "/intl-fr/album/ID" → "spotify:album:ID".
+  const uriOfLink = (href) => {
+    const match = /\/(album|artist|playlist|track|show|episode)\/([A-Za-z0-9]+)/.exec(String(href || ""));
+    return match ? `spotify:${match[1]}:${match[2]}` : null;
+  };
+
+  const nearestUri = (element) => {
+    for (let fiber = fiberOf(element), depth = 0; fiber && depth < 40; fiber = fiber.return, depth++) {
+      const props = fiber.memoizedProps;
+      if (props && isUri(props.uri)) return props.uri;
+    }
+    return null;
+  };
+
+  // The shuffle button has no data-testid: it comes just before "previous".
+  const shuffleButton = () => {
+    const controls = document.querySelector(SCREEN.controls);
+    const buttons = controls ? [...controls.querySelectorAll("button")] : [];
+    const previous = buttons.findIndex((button) => button.matches(BUTTONS.previous));
+    return previous > 0 ? buttons[previous - 1] : null;
+  };
+
+  // On, the shuffle button gets a dot under it and Spotify's readable
+  // "bright accent" class (its colour depends on the theme, so not that).
+  const shuffleOn = () => {
+    const shuffle = shuffleButton();
+    if (!shuffle) return false;
+    const dot = getComputedStyle(shuffle, "::after").content;
+    return (
+      (dot !== "none" && dot !== "normal" && dot !== "") ||
+      /\bencore-internal-color-text-bright-accent\b/.test(shuffle.className)
+    );
+  };
+
+  const repeatMode = () => {
+    const checked = document.querySelector(SCREEN.repeat)?.getAttribute("aria-checked");
+    return checked === "true" ? "context" : checked === "mixed" ? "track" : "off";
+  };
+
+  const numberOf = (selector, attribute) => {
+    const value = Number(document.querySelector(selector)?.[attribute]);
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const screenSnapshot = () => {
+    if (!document.querySelector(SCREEN.bar)) return null;
+    const title = document.querySelector(SCREEN.title);
+    let position = numberOf(SCREEN.progressInput, "value");
+    if (position === null) position = clock(document.querySelector(SCREEN.position)?.textContent) || 0;
+    let duration = numberOf(SCREEN.progressInput, "max");
+    if (!duration) {
+      const text = document.querySelector(SCREEN.duration)?.textContent || "";
+      const shown = clock(text) || 0;
+      duration = text.trim().startsWith("-") ? position + shown : shown;
+    }
+    let track = null;
+    if (title) {
+      const uri = nearestUri(title) || "";
+      const album = uriOfLink(title.getAttribute("href"));
+      track = Object.freeze({
+        uri,
+        name: title.textContent.trim(),
+        type: uri ? uri.split(":")[1] : "track",
+        duration,
+        artists: Object.freeze(
+          [...document.querySelectorAll(SCREEN.artists)].map((link) =>
+            Object.freeze({ uri: uriOfLink(link.getAttribute("href")), name: link.textContent.trim() }),
+          ),
+        ),
+        album: album && album.startsWith("spotify:album:") ? Object.freeze({ uri: album, name: "" }) : null,
+        image: document.querySelector(SCREEN.cover)?.getAttribute("src") || null,
+        isLocal: false,
+        isExplicit: false,
+      });
+    }
+    const playing = !!track && Date.now() - screen.movedAt < MOVING_MS;
+    return Object.freeze({
+      track,
+      context: null,
+      isPlaying: playing,
+      isPaused: !playing,
+      position: Math.round(position),
+      duration,
+      shuffle: shuffleOn(),
+      repeat: repeatMode(),
+      speed: 1,
+    });
+  };
+
+  // Plays the part of Spotify's events while its services are missing.
+  placers.add(() => {
+    if (playerApi()) return;
+    // The time shown moves while a track plays.
+    const positionText = document.querySelector(SCREEN.position)?.textContent ?? null;
+    if (positionText !== screen.positionText) {
+      if (screen.positionText !== null) screen.movedAt = Date.now();
+      screen.positionText = positionText;
+    }
+    if (!(changeListeners.size || trackListeners.size || volumeListeners.size)) return;
+    const now = screenSnapshot();
+    const signature = now
+      ? `${now.track && now.track.name}|${now.track && now.track.uri}|${now.isPaused}|${now.position}|${now.shuffle}|${now.repeat}`
+      : "";
+    if (signature !== screen.signature) {
+      screen.signature = signature;
+      emit(changeListeners, now);
+    }
+    const trackKey = now && now.track ? `${now.track.uri}|${now.track.name}` : "";
+    if (trackKey !== screen.trackKey) {
+      if (screen.trackKey !== null) emit(trackListeners, now ? now.track : null);
+      screen.trackKey = trackKey;
+    }
+    const volume = numberOf(SCREEN.volumeInput, "value");
+    if (volume !== screen.volume) {
+      if (screen.volume !== null && volume !== null) emit(volumeListeners, volume);
+      screen.volume = volume;
+    }
+  });
+
+  // Bars and buttons redraw a moment after a click.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+  const playerState = () => (playerApi() ? snapshot() : screenSnapshot());
 
   const needPlayer = (what) => {
     const api = playerApi();
@@ -638,8 +821,14 @@
               resolve();
               return;
             }
+            // Without Spotify's services, the player on screen will do (plan B).
             const timer =
-              timeout > 0 ? setTimeout(() => reject(unavailable("the player")), timeout) : null;
+              timeout > 0
+                ? setTimeout(() => {
+                    if (document.querySelector(SCREEN.bar)) resolve();
+                    else reject(unavailable("the player"));
+                  }, timeout)
+                : null;
             whenInternals(() => {
               clearTimeout(timer);
               if (playerApi()) resolve();
@@ -647,7 +836,7 @@
             });
           }),
       ),
-      state: () => snapshot(),
+      state: () => playerState(),
       onChange: (callback) => listenWith(state, changeListeners, "player.onChange callback", callback),
       onTrackChange: (callback) =>
         listenWith(state, trackListeners, "player.onTrackChange callback", callback),
@@ -655,10 +844,14 @@
         listenWith(state, volumeListeners, "player.onVolumeChange callback", callback),
 
       play: run(async () => {
-        await needPlayer("play").resume();
+        const api = playerApi();
+        if (api) await api.resume();
+        else if (screenSnapshot()?.isPaused) press("playpause");
       }),
       pause: run(async () => {
-        await needPlayer("pause").pause();
+        const api = playerApi();
+        if (api) await api.pause();
+        else if (screenSnapshot()?.isPlaying) press("playpause");
       }),
       togglePlay: run(async () => {
         const api = playerApi();
@@ -680,16 +873,43 @@
         if (typeof milliseconds !== "number" || !Number.isFinite(milliseconds) || milliseconds < 0) {
           throw new TypeError("seek needs a position in milliseconds");
         }
-        await needPlayer("seek").seekTo(Math.round(milliseconds));
+        const api = playerApi();
+        if (api) {
+          await api.seekTo(Math.round(milliseconds));
+          return;
+        }
+        const duration = screenSnapshot()?.duration;
+        if (!duration) throw unavailable("seek");
+        pressBar(SCREEN.progress, milliseconds / duration);
+        await settle();
       }),
       setShuffle: run(async (on) => {
         if (typeof on !== "boolean") throw new TypeError("setShuffle needs true or false");
-        await needPlayer("shuffle").setShuffle(on);
+        const api = playerApi();
+        if (api) {
+          await api.setShuffle(on);
+          return;
+        }
+        const button = shuffleButton();
+        if (!button) throw unavailable("the shuffle button");
+        if (shuffleOn() !== on) button.click();
+        await settle();
       }),
       setRepeat: run(async (mode) => {
         const index = REPEAT.indexOf(mode);
         if (index < 0) throw new TypeError('setRepeat needs "off", "context" or "track"');
-        await needPlayer("repeat").setRepeat(index);
+        const api = playerApi();
+        if (api) {
+          await api.setRepeat(index);
+          return;
+        }
+        const button = document.querySelector(SCREEN.repeat);
+        if (!button) throw unavailable("the repeat button");
+        // The button goes off → context → track → off.
+        for (let i = 0; i < 3 && repeatMode() !== mode; i++) {
+          button.click();
+          await settle();
+        }
       }),
       playUri: run(async (uri) => {
         checkUris(uri);
@@ -698,16 +918,23 @@
       }),
       getVolume: run(async () => {
         const api = playbackApi();
-        if (!api) throw unavailable("the volume");
-        return api.getVolume();
+        if (api) return api.getVolume();
+        const volume = numberOf(SCREEN.volumeInput, "value");
+        if (volume === null) throw unavailable("the volume");
+        return volume;
       }),
       setVolume: run(async (volume) => {
         if (typeof volume !== "number" || !Number.isFinite(volume)) {
           throw new TypeError("setVolume needs a number from 0 to 1");
         }
+        const level = Math.max(0, Math.min(1, volume));
         const api = playbackApi();
-        if (!api) throw unavailable("the volume");
-        await api.setVolume(Math.max(0, Math.min(1, volume)));
+        if (api) {
+          await api.setVolume(level);
+          return;
+        }
+        pressBar(SCREEN.volume, level);
+        await settle();
       }),
 
       queue: run(async () => {

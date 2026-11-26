@@ -387,6 +387,26 @@ pub fn install(source: &Source, entry: &Entry, store: &ModStore) -> Result<Insta
     result
 }
 
+/// Whether the installed mod `id` is exactly one the gallery accepted: same
+/// version, and every file it lists has the same SHA-256. A copy changed by
+/// hand, or a mod that is not in the gallery, is not.
+pub fn is_verified(catalog: &Catalog, store: &ModStore, kind: ModKind, id: &str) -> bool {
+    let Some(entry) = catalog.get(id).filter(|entry| entry.kind == kind) else {
+        return false;
+    };
+    let dir = store.path_of(kind, id);
+    let Ok(loaded) = mods::load_dir(&dir) else {
+        return false;
+    };
+    loaded.meta().version.to_string() == entry.version
+        && entry.files.iter().all(|file| {
+            // The showcase is only shown in the gallery: it may not be installed.
+            file.path.starts_with("showcase/")
+                || fs::read(dir.join(&file.path))
+                    .is_ok_and(|bytes| sha256_hex(&bytes) == file.sha256)
+        })
+}
+
 fn download(source: &Source, entry: &Entry, dir: &Path) -> Result<()> {
     let mut total = 0u64;
     for file in &entry.files {
