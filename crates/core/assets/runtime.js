@@ -5,10 +5,12 @@
 // extension only logs errors: it never stops Spotify or the other
 // extensions. One that keeps failing is stopped.
 //
-// spacetify replaces the CONFIG placeholder below when it builds the payload.
+// spacetify replaces the CONFIG placeholder below when it builds the payload,
+// and the gallery one with assets/gallery.js.
 (() => {
   "use strict";
   const CONFIG = /*@spacetify-config*/ null;
+  const startGallery = /*@spacetify-gallery*/ null;
   if (!CONFIG || window.__spacetify) return;
 
   const MAX_LOGS = 300;
@@ -466,6 +468,17 @@
         for (const state of extensions.values()) notStarted(state);
       }, 1000),
     );
+  }
+
+  // The gallery page, which talks to the background service.
+  if (CONFIG.gallery && typeof startGallery === "function") {
+    onReady(() => {
+      try {
+        startGallery(CONFIG.gallery, (level, args) => write(level, "gallery", args));
+      } catch (error) {
+        write("error", "gallery", [error]);
+      }
+    });
   }
 
   const theme = CONFIG.theme ? `${CONFIG.theme.name} ${CONFIG.theme.version}` : "none";

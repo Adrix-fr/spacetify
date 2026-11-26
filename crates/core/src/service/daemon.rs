@@ -11,6 +11,12 @@
 //! 3. Back up the new interface (checked by hash), turn off the mods that no
 //!    longer fit it, and apply the rest.
 //!
+//! It also keeps Spotify in step with the mods: when what Spotify carries is
+//! no longer what spacetify would put in it (a theme, an extension or a
+//! setting changed in the app, the CLI or the gallery, or spacetify itself
+//! was updated), it applies again the next time Spotify is closed. It looks
+//! at startup and whenever the mods or `config.toml` change.
+//!
 //! Each piece of news is reported once: in `events.jsonl`, and with a
 //! desktop notification when the user may want to act.
 
@@ -29,6 +35,9 @@ use super::{
 use crate::backup::{self, BackupStore};
 use crate::config::{AppDirs, Config};
 use crate::detect::{self, UiState};
+use crate::gallery::{self, Link};
+use crate::mods::ModKind;
+use crate::patcher::{self, Payload};
 use crate::spotify::{self, SpotifyInstall};
 use crate::{Error, Lang, Result};
 
@@ -47,6 +56,11 @@ const MAX_SEEN: usize = 50;
 /// even if the mods could not be put back.
 const RELAUNCH_WITHIN: Duration = Duration::from_secs(60);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(15);
+/// How often to look whether Spotify was closed, while changes made in the
+/// gallery wait for it.
+const PENDING_POLL: Duration = Duration::from_secs(5);
+/// After a change to the mods, wait this long for more before looking.
+const MODS_SETTLE: Duration = Duration::from_secs(2);
 
 /// What the service needs from the outside world. Tests replace it.
 pub trait Host {
@@ -118,11 +132,32 @@ pub fn run(settings: Settings) -> Result<()> {
         .watch(&inbox, RecursiveMode::NonRecursive)
         .map_err(watch_error)?;
     let mut watched: Vec<PathBuf> = Vec::new();
+    let config_dir = settings.dirs.config_dir.clone();
+    if let Err(err) = std::fs::create_dir_all(&config_dir)
+        .map_err(|err| err.to_string())
+        .and_then(|()| {
+            watcher
+                .watch(&config_dir, RecursiveMode::Recursive)
+                .map_err(|err| err.to_string())
+        })
+    {
+        tracing::warn!("cannot watch {}: {err}", config_dir.display());
+    }
+    let mods_dirs = [
+        settings.dirs.config_file(),
+        settings.dirs.mods().dir_of(ModKind::Theme),
+        settings.dirs.mods().dir_of(ModKind::Extension),
+    ];
 
+    let new_port = start_gallery(&settings.dirs);
     let host = SystemHost {
         paths: paths.clone(),
     };
     let mut daemon = Daemon::new(settings, host, Instant::now());
+    if new_port {
+        // The page in Spotify still knows the old port.
+        daemon.apply_later(Instant::now());
+    }
     tracing::info!("service started");
     loop {
         // After the check, which is what finds Spotify's folder.
@@ -147,8 +182,17 @@ pub fn run(settings: Settings) -> Result<()> {
                     }
                     Request::Check => daemon.check_now(Instant::now()),
                     Request::RestartSpotify => daemon.restart_spotify(Instant::now()),
+                    Request::ApplyLater => daemon.apply_later(Instant::now()),
+                    Request::ApplyNow => daemon.apply_now(Instant::now()),
                 }
             }
+        }
+        if event
+            .paths
+            .iter()
+            .any(|path| mods_dirs.iter().any(|dir| path.starts_with(dir)))
+        {
+            daemon.mods_changed(Instant::now());
         }
         if let Some(install) = &daemon.install
             && concerns_interface(&event.paths, &install.apps_dir)
@@ -165,6 +209,39 @@ pub fn run(settings: Settings) -> Result<()> {
     }
     daemon.stop();
     Ok(())
+}
+
+/// Starts the gallery's local server. Returns true if its port had to
+/// change because another program took it.
+fn start_gallery(dirs: &AppDirs) -> bool {
+    let source = gallery::Source::from_env();
+    let paths = ServicePaths::new(dirs);
+    let link = match Link::load_or_create(&paths) {
+        Ok(link) => link,
+        Err(err) => {
+            tracing::warn!("no gallery: {err}");
+            return false;
+        }
+    };
+    let port = link.port;
+    let Err(err) = gallery::server::spawn(dirs.clone(), link, source.clone()) else {
+        tracing::info!("gallery server on 127.0.0.1:{port}");
+        return false;
+    };
+    tracing::warn!("gallery port {port} is taken ({err}), choosing another");
+    match Link::create(&paths).and_then(|link| {
+        let port = link.port;
+        gallery::server::spawn(dirs.clone(), link, source).map(|()| port)
+    }) {
+        Ok(port) => {
+            tracing::info!("gallery server on 127.0.0.1:{port}");
+            true
+        }
+        Err(err) => {
+            tracing::warn!("no gallery: {err}");
+            false
+        }
+    }
 }
 
 fn watch_error(err: notify::Error) -> Error {
@@ -230,6 +307,10 @@ pub(crate) struct Daemon<H: Host> {
     healthy: Option<Stamp>,
     /// Spotify was closed by "Restart Spotify": open it again by then.
     relaunch_by: Option<Instant>,
+    /// Put into the payload so the gallery page can reach the service.
+    gallery: Option<Link>,
+    /// The mods may have changed since Spotify was last checked against them.
+    mods_dirty: bool,
 }
 
 impl<H: Host> Daemon<H> {
@@ -244,8 +325,10 @@ impl<H: Host> Daemon<H> {
             phase: Phase::Starting,
             spotify_version: None,
             last_repair: previous.as_ref().and_then(|p| p.last_repair.clone()),
+            apply_pending: previous.as_ref().is_some_and(|p| p.apply_pending),
             seen: previous.map(|p| p.seen).unwrap_or_default(),
         };
+        let gallery = Link::load(&paths);
         let daemon = Self {
             events: EventLog::new(paths.events_file()),
             settings,
@@ -257,6 +340,9 @@ impl<H: Host> Daemon<H> {
             settling: None,
             healthy: None,
             relaunch_by: None,
+            gallery,
+            // spacetify may have been updated: check once at startup.
+            mods_dirty: true,
         };
         daemon.save();
         daemon.log(EventKind::Started {
@@ -304,13 +390,49 @@ impl<H: Host> Daemon<H> {
         self.next_check = now;
     }
 
+    /// A theme, an extension or `config.toml` changed: look whether Spotify
+    /// is still in step, once the changes settle.
+    pub(crate) fn mods_changed(&mut self, now: Instant) {
+        self.mods_dirty = true;
+        self.next_check = self.next_check.min(now + MODS_SETTLE);
+    }
+
+    /// The gallery changed the mods: apply them as soon as Spotify is closed.
+    pub(crate) fn apply_later(&mut self, now: Instant) {
+        if !self.status.apply_pending {
+            self.status.apply_pending = true;
+            self.save();
+        }
+        self.check_now(now);
+    }
+
+    /// The gallery's "Restart Spotify": close it, apply the changes, then
+    /// open it again.
+    pub(crate) fn apply_now(&mut self, now: Instant) {
+        self.apply_later(now);
+        match self.host.busy() {
+            Ok(Some(_)) => {
+                if let Err(err) = self.host.close_spotify() {
+                    tracing::warn!("could not close Spotify: {err}");
+                    return;
+                }
+                self.relaunch_by = Some(now + RELAUNCH_WITHIN);
+            }
+            Ok(None) => {}
+            Err(err) => tracing::warn!("{err}"),
+        }
+    }
+
     /// Opens Spotify again after "Restart Spotify", once the repair is over
     /// one way or another.
     fn relaunch_if_done(&mut self, now: Instant) {
         let Some(deadline) = self.relaunch_by else {
             return;
         };
-        let pending = matches!(self.status.phase, Phase::Settling | Phase::Repairing);
+        let pending = matches!(
+            self.status.phase,
+            Phase::Settling | Phase::Repairing | Phase::Applying
+        );
         if pending && now < deadline {
             return;
         }
@@ -363,7 +485,12 @@ impl<H: Host> Daemon<H> {
 
         let spa = install.xpui_spa();
         let current = stamp(&spa);
-        if self.status.phase == Phase::Watching && current.is_some() && current == self.healthy {
+        if self.status.phase == Phase::Watching
+            && current.is_some()
+            && current == self.healthy
+            && !self.status.apply_pending
+            && !self.mods_dirty
+        {
             return FALLBACK;
         }
         let inspection = match detect::inspect(&install) {
@@ -378,8 +505,19 @@ impl<H: Host> Daemon<H> {
         };
         match inspection.state {
             UiState::Patched(_) => {
-                self.healthy = current;
                 self.settling = None;
+                if std::mem::take(&mut self.mods_dirty)
+                    && !self.status.apply_pending
+                    && self.out_of_step(&install)
+                {
+                    tracing::info!("Spotify is not in step with the mods any more");
+                    self.status.apply_pending = true;
+                    self.save();
+                }
+                if self.status.apply_pending {
+                    return self.apply_changes(&install, &store);
+                }
+                self.healthy = current;
                 self.new_episode();
                 self.set_phase(Phase::Watching);
                 FALLBACK
@@ -468,6 +606,7 @@ impl<H: Host> Daemon<H> {
             store,
             &self.settings.dirs.mods(),
             &self.settings.dirs.config_file(),
+            self.gallery.as_ref(),
             || repair::idle_unless(self.host.busy()),
         );
         match outcome {
@@ -545,9 +684,88 @@ impl<H: Host> Daemon<H> {
         self.notify(Text::new("Mods put back", "Mods remis en place"), body);
 
         self.status.last_repair = Some(backup::now());
+        // The repair applied what is in `config.toml`, gallery changes included.
+        self.status.apply_pending = false;
+        self.save();
         self.healthy = stamp(&install.xpui_spa());
         self.new_episode();
         self.set_phase(Phase::Watching);
+    }
+
+    /// Whether applying now would change what Spotify carries.
+    fn out_of_step(&self, install: &SpotifyInstall) -> bool {
+        let active = Config::load(&self.settings.dirs.config_file())
+            .and_then(|config| self.settings.dirs.mods().active(&config));
+        let active = match active {
+            Ok(active) => active,
+            // Applying would fail the same way: leave Spotify as it is.
+            Err(err) => {
+                tracing::info!("mods not checked: {err}");
+                return false;
+            }
+        };
+        let payload = Payload::new(&active).with_gallery(self.gallery.as_ref());
+        match patcher::carries(&install.xpui_spa(), &payload) {
+            Ok(carries) => !carries,
+            Err(err) => {
+                tracing::info!("{err}");
+                false
+            }
+        }
+    }
+
+    /// Applies the changes made in the gallery, once Spotify is closed.
+    fn apply_changes(&mut self, install: &SpotifyInstall, store: &BackupStore) -> Duration {
+        match self.host.busy() {
+            Ok(None) => {}
+            Ok(Some(_)) => {
+                self.set_phase(Phase::Watching);
+                return PENDING_POLL;
+            }
+            Err(err) => {
+                tracing::warn!("{err}");
+                return PENDING_POLL;
+            }
+        }
+        self.set_phase(Phase::Applying);
+        let outcome = repair::apply_changes(
+            install,
+            store,
+            &self.settings.dirs.mods(),
+            &self.settings.dirs.config_file(),
+            self.gallery.as_ref(),
+            || repair::idle_unless(self.host.busy()),
+        );
+        match outcome {
+            Ok(applied) => {
+                self.log(EventKind::ChangesApplied {
+                    theme: applied.theme,
+                    extensions: applied.extensions,
+                });
+            }
+            // Started again in the meantime: wait for it to close.
+            Err(Error::SpotifyRunning) => {
+                self.set_phase(Phase::Watching);
+                return PENDING_POLL;
+            }
+            Err(Error::Busy) => return SOON,
+            Err(err) => {
+                tracing::warn!("could not apply the gallery's changes: {err}");
+                self.notify(
+                    Text::new(
+                        "spacetify could not apply your changes",
+                        "spacetify n'a pas pu appliquer tes changements",
+                    ),
+                    Text::of_error(&err),
+                );
+            }
+        }
+        self.status.apply_pending = false;
+        self.healthy = stamp(&install.xpui_spa());
+        self.new_episode();
+        self.set_phase(Phase::Watching);
+        self.save();
+        FALLBACK
     }
 
     /// Spotify is in a state the service must not touch.

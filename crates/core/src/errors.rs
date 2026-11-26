@@ -138,6 +138,25 @@ pub enum Error {
     #[error("Could not set up spacetify for this user: {0}")]
     Setup(String),
 
+    #[error("The gallery could not be reached: {0}")]
+    GalleryUnreachable(String),
+
+    #[error("The gallery's list is not valid ({0}). Nothing was installed.")]
+    GalleryInvalid(String),
+
+    #[error(
+        "The file {file} received for `{id}` is not the one in the gallery's list. To be safe, nothing was installed."
+    )]
+    GalleryFileMismatch { id: String, file: String },
+
+    #[error(
+        "What was received for `{0}` does not match the gallery's list. To be safe, nothing was installed."
+    )]
+    GalleryModMismatch(String),
+
+    #[error("`{0}` is not in the gallery.")]
+    NotInGallery(String),
+
     #[error("File error on {}: {source}", .path.display())]
     Io {
         path: PathBuf,
@@ -198,6 +217,11 @@ impl Error {
             Self::ServiceStop => "Le service en arrière-plan ne s'est pas arrêté. Ferme `spacetify-service` dans le Gestionnaire des tâches.".into(),
             Self::Autostart(reason) => format!("Impossible de modifier le démarrage avec l'ordinateur : {reason}"),
             Self::Setup(reason) => format!("Impossible de préparer spacetify pour cet utilisateur : {reason}"),
+            Self::GalleryUnreachable(reason) => format!("Impossible de joindre la galerie : {reason}"),
+            Self::GalleryInvalid(reason) => format!("La liste de la galerie n'est pas valide ({reason}). Rien n'a été installé."),
+            Self::GalleryFileMismatch { id, file } => format!("Le fichier {file} reçu pour `{id}` n'est pas celui de la liste de la galerie. Par prudence, rien n'a été installé."),
+            Self::GalleryModMismatch(id) => format!("Ce qui a été reçu pour `{id}` ne correspond pas à la liste de la galerie. Par prudence, rien n'a été installé."),
+            Self::NotInGallery(id) => format!("`{id}` n'est pas dans la galerie."),
             Self::Io { path, source } => format!("Erreur de fichier sur {} : {source}", path.display()),
         }
     }

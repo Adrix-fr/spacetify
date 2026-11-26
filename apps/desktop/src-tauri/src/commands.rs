@@ -9,6 +9,7 @@ use serde::Serialize;
 use serde_json::Value as Json;
 use spacetify_core::detect;
 use spacetify_core::doctor;
+use spacetify_core::gallery::Link;
 use spacetify_core::mods::{ModKind, ModStore};
 use spacetify_core::patcher::{self, ApplyOutcome, Payload, RestoreOutcome};
 use spacetify_core::service::autostart;
@@ -182,7 +183,9 @@ pub async fn apply(app: AppHandle, state: State<'_, Shared>, close_spotify: bool
             &app,
             tr!(lang, "Applying the mods…", "Application des mods…"),
         );
-        let result = patcher::apply(&install, &state.store(), &Payload::new(&mods));
+        let link = Link::for_payload(&service::ServicePaths::new(&state.dirs));
+        let payload = Payload::new(&mods).with_gallery(link.as_ref());
+        let result = patcher::apply(&install, &state.store(), &payload);
         if closed {
             progress(
                 &app,

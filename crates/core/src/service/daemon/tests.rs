@@ -463,3 +463,167 @@ fn restart_button_does_nothing_when_nothing_waits() {
     assert_eq!(*host.closed.borrow(), 0);
     assert_eq!(*host.launched.borrow(), 0);
 }
+
+/// What the gallery's server does when an extension is turned on.
+fn turn_on_from_the_gallery(s: &Setup, id: &str) {
+    let dir = s.sources.join(id);
+    write_extension(&dir, id, &[]);
+    let mods = s.dirs.mods();
+    mods.install(&dir).unwrap();
+    let mut config = s.config();
+    mods.enable(&mut config, id).unwrap();
+    config.save(&s.dirs.config_file()).unwrap();
+}
+
+fn extensions_in_spotify(s: &Setup) -> bool {
+    let file = fs::File::open(s.spa()).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    archive
+        .by_name("spacetify/extensions/from-gallery.js")
+        .is_ok()
+}
+
+#[test]
+fn gallery_changes_wait_for_spotify_to_close() {
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.apply();
+    host.set_busy(Some("Spotify.exe"));
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    daemon.tick(clock);
+    assert_eq!(phase(&daemon), &Phase::Watching);
+
+    turn_on_from_the_gallery(&s, "from-gallery");
+    daemon.apply_later(clock);
+    run_for(&mut daemon, &mut clock, 60);
+    assert!(
+        !extensions_in_spotify(&s),
+        "nothing is written while Spotify runs"
+    );
+    assert!(daemon.status.apply_pending);
+    assert_eq!(
+        *host.closed.borrow(),
+        0,
+        "Spotify is never closed without asking"
+    );
+
+    host.set_busy(None);
+    run_for(&mut daemon, &mut clock, 6);
+    assert!(extensions_in_spotify(&s));
+    assert!(!daemon.status.apply_pending);
+    assert_eq!(phase(&daemon), &Phase::Watching);
+    assert!(s.has_event(|e| matches!(e, EventKind::ChangesApplied { extensions: 1, .. })));
+    assert_eq!(*host.launched.borrow(), 0);
+    assert_eq!(
+        host.shown(),
+        0,
+        "no notification for a change the user made"
+    );
+}
+
+#[test]
+fn gallery_restart_button_applies_and_reopens_spotify() {
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.apply();
+    host.set_busy(Some("Spotify.exe"));
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    daemon.tick(clock);
+
+    turn_on_from_the_gallery(&s, "from-gallery");
+    daemon.apply_later(clock);
+    daemon.apply_now(clock);
+    assert_eq!(*host.closed.borrow(), 1);
+    run_for(&mut daemon, &mut clock, 2);
+
+    assert!(extensions_in_spotify(&s));
+    assert_eq!(*host.launched.borrow(), 1, "Spotify is opened again");
+    assert!(!daemon.status.apply_pending);
+    assert!(s.has_event(|e| matches!(e, EventKind::SpotifyRestarted)));
+}
+
+#[test]
+fn gallery_changes_survive_a_restart_of_the_service() {
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.apply();
+    host.set_busy(Some("Spotify.exe"));
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    turn_on_from_the_gallery(&s, "from-gallery");
+    daemon.apply_later(clock);
+    daemon.tick(clock);
+    drop(daemon);
+
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    assert!(daemon.status.apply_pending);
+    host.set_busy(None);
+    run_for(&mut daemon, &mut clock, 3);
+    assert!(extensions_in_spotify(&s));
+}
+
+#[test]
+fn leaves_spotify_alone_when_it_is_in_step_with_the_mods() {
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.add_extension("steady", &[]);
+    s.apply();
+    let before = s.sha();
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    daemon.mods_changed(clock);
+    run_for(&mut daemon, &mut clock, 30);
+    assert_eq!(s.sha(), before);
+    assert!(!daemon.status.apply_pending);
+    assert!(!s.has_event(|e| matches!(e, EventKind::ChangesApplied { .. })));
+}
+
+#[test]
+fn catches_up_at_startup_when_spotify_is_behind() {
+    // As after an update of spacetify, or mods changed while no service ran.
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.apply();
+    s.add_extension("from-gallery", &[]);
+    host.set_busy(Some("Spotify.exe"));
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    run_for(&mut daemon, &mut clock, 20);
+    assert!(
+        !extensions_in_spotify(&s),
+        "nothing is written while Spotify runs"
+    );
+    assert!(daemon.status.apply_pending);
+
+    host.set_busy(None);
+    run_for(&mut daemon, &mut clock, 6);
+    assert!(extensions_in_spotify(&s));
+    assert!(!daemon.status.apply_pending);
+}
+
+#[test]
+fn applies_mods_changed_in_the_app_or_the_cli() {
+    let s = Setup::new();
+    let host = FakeHost::default();
+    s.apply();
+    let mut clock = Instant::now();
+    let mut daemon = Daemon::new(s.settings(), &host, clock);
+    run_for(&mut daemon, &mut clock, 5);
+    assert_eq!(phase(&daemon), &Phase::Watching);
+
+    s.add_extension("from-gallery", &[]);
+    daemon.mods_changed(clock);
+    run_for(&mut daemon, &mut clock, 5);
+    assert!(extensions_in_spotify(&s));
+    assert!(s.has_event(|e| matches!(e, EventKind::ChangesApplied { extensions: 1, .. })));
+
+    // Turned off again: taken out too.
+    let mut config = s.config();
+    s.dirs.mods().disable(&mut config, "from-gallery").unwrap();
+    config.save(&s.dirs.config_file()).unwrap();
+    daemon.mods_changed(clock);
+    run_for(&mut daemon, &mut clock, 5);
+    assert!(!extensions_in_spotify(&s));
+}

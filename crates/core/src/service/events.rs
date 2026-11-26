@@ -65,6 +65,17 @@ pub enum EventKind {
     OnHold {
         reason: Text,
     },
+    /// A mod was installed from the gallery inside Spotify.
+    GalleryInstalled {
+        kind: ModKind,
+        id: String,
+        version: String,
+    },
+    /// Changes made in the gallery were applied to Spotify.
+    ChangesApplied {
+        theme: Option<String>,
+        extensions: usize,
+    },
 }
 
 impl EventKind {
@@ -137,6 +148,20 @@ impl EventKind {
                 "Spotify a été relancé à ta demande."
             ),
             Self::OnHold { reason } => reason.get(lang).to_owned(),
+            Self::GalleryInstalled { kind, id, version } => tr!(
+                lang,
+                "The {} `{id}` {version} was installed from the gallery.",
+                "Le/la {} `{id}` {version} a été installé(e) depuis la galerie.",
+                kind.label(lang)
+            ),
+            Self::ChangesApplied { theme, extensions } => {
+                let theme = theme.clone().unwrap_or_else(|| tr!(lang, "none", "aucun"));
+                tr!(
+                    lang,
+                    "Changes from the gallery applied (theme: {theme}, extensions: {extensions}).",
+                    "Changements de la galerie appliqués (thème : {theme}, extensions : {extensions})."
+                )
+            }
         }
     }
 }

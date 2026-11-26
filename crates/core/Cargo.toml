@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 dirs.workspace = true
+getrandom.workspace = true
 humantime.workspace = true
 notify.workspace = true
 semver.workspace = true
@@ -22,6 +23,7 @@ toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tungstenite.workspace = true
+ureq.workspace = true
 zip.workspace = true
 
 [target.'cfg(windows)'.dependencies]

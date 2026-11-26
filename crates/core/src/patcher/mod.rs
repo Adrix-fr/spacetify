@@ -260,6 +260,47 @@ pub fn build_patched(original: &Path, marker: &Marker, payload: &Payload) -> Res
     Ok(out.finish().map_err(zip_err)?.into_inner())
 }
 
+/// Whether the patched interface at `spa` already carries exactly `payload`:
+/// the same theme, extensions, settings, runtime and gallery link. When it
+/// does not, applying again would change something.
+pub fn carries(spa: &Path, payload: &Payload) -> Result<bool> {
+    let zip_err = |err: zip::result::ZipError| Error::InvalidArchive {
+        path: spa.to_path_buf(),
+        reason: err.to_string(),
+    };
+    let file = File::open(spa).map_err(Error::io(spa))?;
+    let mut archive = ZipArchive::new(BufReader::new(file)).map_err(zip_err)?;
+    let expected: Vec<(String, Vec<u8>)> = payload
+        .files(&Marker::new(""))
+        .into_iter()
+        .filter(|(name, _)| name != MARKER_PATH)
+        .collect();
+    let mut present = std::collections::BTreeSet::new();
+    for name in archive.file_names() {
+        let name = name.map_err(zip_err)?;
+        if name.starts_with(ASSET_DIR) && name != MARKER_PATH {
+            present.insert(name.into_owned());
+        }
+    }
+    if present.len() != expected.len() {
+        return Ok(false);
+    }
+    for (name, content) in &expected {
+        let Ok(mut entry) = archive.by_name(name) else {
+            return Ok(false);
+        };
+        if entry.size() != content.len() as u64 {
+            return Ok(false);
+        }
+        let mut bytes = Vec::with_capacity(content.len());
+        entry.read_to_end(&mut bytes).map_err(Error::io(spa))?;
+        if bytes != *content {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Adds our loader block right before `</body>`, replacing any previous one.
 pub fn inject_html(html: &str) -> String {
     let mut html = strip_block(html);

@@ -12,10 +12,13 @@
 use serde_json::{Value as Json, json};
 
 use super::{ASSET_DIR, MARKER_PATH, Marker};
+use crate::gallery::Link;
 use crate::mods::{ActiveMods, Extension};
 
 const RUNTIME: &str = include_str!("../../assets/runtime.js");
 const CONFIG_PLACEHOLDER: &str = "/*@spacetify-config*/ null";
+const GALLERY: &str = include_str!("../../assets/gallery.js");
+const GALLERY_PLACEHOLDER: &str = "/*@spacetify-gallery*/ null";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -29,6 +32,8 @@ pub struct Payload {
     css: String,
     theme: Json,
     extensions: Vec<(String, Json, String)>,
+    /// How the gallery page reaches the service, if there is a gallery.
+    gallery: Json,
 }
 
 impl Payload {
@@ -49,7 +54,17 @@ impl Payload {
                 .iter()
                 .map(|e| (e.manifest.meta.id.clone(), meta_json(e), e.code.clone()))
                 .collect(),
+            gallery: Json::Null,
         }
+    }
+
+    /// Adds the gallery page, which reaches the service through `link`.
+    pub fn with_gallery(mut self, link: Option<&Link>) -> Self {
+        self.gallery = link.map_or(
+            Json::Null,
+            |link| json!({ "url": link.url(), "token": link.token }),
+        );
+        self
     }
 
     /// Files added to the archive, as `(path, content)`, in a fixed order.
@@ -100,8 +115,18 @@ impl Payload {
             "theme": self.theme,
             "css": match mode { Mode::File => Json::Null, Mode::Live => json!(self.css) },
             "extensions": extensions,
+            "gallery": self.gallery,
         });
-        RUNTIME.replacen(CONFIG_PLACEHOLDER, &to_js(&config), 1)
+        let gallery = if self.gallery.is_null() {
+            "null"
+        } else {
+            GALLERY.trim_end()
+        };
+        RUNTIME.replacen(GALLERY_PLACEHOLDER, gallery, 1).replacen(
+            CONFIG_PLACEHOLDER,
+            &to_js(&config),
+            1,
+        )
     }
 }
 
@@ -193,6 +218,22 @@ mod tests {
         assert!(!runtime.contains(CONFIG_PLACEHOLDER));
         assert!(runtime.contains("\"mode\":\"file\""));
         assert_eq!(payload.live_scripts().len(), 1);
+        assert!(runtime.contains("\"gallery\":null"));
+        assert!(!runtime.contains(GALLERY_PLACEHOLDER));
+        assert!(!runtime.contains("function startGallery"));
+    }
+
+    #[test]
+    fn the_gallery_link_goes_into_the_runtime() {
+        let link = Link {
+            port: 4242,
+            token: "0123456789abcdef0123456789abcdef".into(),
+        };
+        let payload = Payload::new(&ActiveMods::default()).with_gallery(Some(&link));
+        let live = &payload.live_scripts()[0];
+        assert!(live.contains("\"token\":\"0123456789abcdef0123456789abcdef\""));
+        assert!(live.contains("\"url\":\"http://127.0.0.1:4242\""));
+        assert!(live.contains("function startGallery"));
     }
 
     #[test]

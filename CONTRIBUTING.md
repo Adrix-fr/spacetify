@@ -34,7 +34,7 @@ cd apps/desktop && npm run check
 - **Logic belongs in `crates/core`.** The CLI, the service and the desktop
   app only display things and ask questions.
 - **Nothing that looks like malware.** No hidden or disguised processes, no
-  copies of the program in system folders, no admin rights, no code
+  copies of the program in system folders, no admin rights, no programs
   downloaded from the internet, no executable packers (UPX or others), and
   no registry or system change beyond the documented startup entry and what
   the installer documents (user `Path`, notification name). The installer
@@ -42,6 +42,16 @@ cd apps/desktop && npm run check
   the uninstall entry, and its other steps live in
   `crates/core/src/setup.rs`. The
   service only uses the file method, never `--live`.
+- **Downloads are the gallery's only.** The only thing spacetify downloads is
+  a mod the user installs from the gallery: listed in `gallery/index.json`,
+  fetched when they click *Install*, every file checked against its SHA-256,
+  then validated like any mod. Nothing else goes to the internet. The
+  gallery's local server (`crates/core/src/gallery/server.rs`) listens on
+  `127.0.0.1` only and answers Spotify's interface only, with its secret.
+- **The gallery list matches the files.** `gallery/index.json` gives the
+  SHA-256 of every file of every mod it lists. When you change one of those
+  files (the examples are in it), update its hash: a test
+  (`the_official_list_matches_the_files_in_the_repository`) fails until you do.
 - **Tests never touch a real Spotify install.** Use the fixtures in
   `crates/core/src/testing.rs`, which build fake `xpui.spa` archives in a
   temporary folder. The service's logic is tested with a fake clock and a
@@ -62,7 +72,8 @@ cd apps/desktop && npm run check
   that says what to fix (`ModIssue`, in English and French).
 - **The injected runtime must never break Spotify.** Every call into an
   extension in `crates/core/assets/runtime.js` goes through the error guard.
-  Check its syntax with `node --check crates/core/assets/runtime.js`.
+  Check its syntax with `node --check crates/core/assets/runtime.js`, and
+  the same for `crates/core/assets/gallery.js`, the gallery page.
 - **Examples stay valid.** `crates/core/tests/examples.rs` loads the mods in
   `examples/`. If you change the mod format, update the examples and the
   guides in `docs/`.

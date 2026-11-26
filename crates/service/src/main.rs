@@ -5,7 +5,9 @@
 //! `<data>/service/service.log`. All the logic is in `spacetify_core::service`.
 //!
 //! It only ever uses the file method. It never starts Spotify with a
-//! debugging port, never downloads anything, and never needs admin rights.
+//! debugging port and never needs admin rights. It downloads nothing but
+//! the mods installed from the gallery inside Spotify, whose page it serves
+//! on 127.0.0.1 (see `spacetify_core::gallery`).
 //!
 //! Options: `--home DIR` (same as `SPACETIFY_HOME`), `--spotify-path DIR`,
 //! `-v`/`-vv` for more details in the log.

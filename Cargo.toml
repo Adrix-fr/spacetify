@@ -16,6 +16,7 @@ clap = { version = "4.6", features = ["derive"] }
 crossterm = "0.29"
 dirs = "7"
 embed-resource = "3"
+getrandom = "0.3"
 humantime = "2.4"
 notify = "9"
 semver = "1"
@@ -35,6 +36,7 @@ thiserror = "2"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 winreg = "0.56"
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }

@@ -2,7 +2,7 @@
 
 A mod manager for the Spotify desktop client, built to survive Spotify updates.
 
-> **Status: early development (phase 4).** The core, the CLI, themes,
+> **Status: early development (phase 5).** The core, the CLI, themes,
 > extensions, automatic repair after updates and the desktop app with its
 > Windows installer work on Windows. macOS and Linux are supported in the
 > code but untested.
@@ -106,8 +106,39 @@ spacetify apply
 ```
 
 One theme is active at a time; any number of extensions can be on. Changes
-show in Spotify after the next `apply` (or `launch --live`). `restore` takes
+show in Spotify after the next `apply` (or `launch --live`). Once mods have
+been applied, the background service also does it for you: it applies any
+change the next time Spotify is closed (see below). `restore` takes
 everything out again.
+
+### The gallery, inside Spotify
+
+Once mods are applied, Spotify shows the spacetify logo next to its back and
+forward arrows. It opens a page over the whole window where you browse the
+themes and extensions of the official list, install them and turn them on or
+off, without leaving Spotify. *Back to Spotify*, the logo again, Spotify's
+back arrow or Escape close it.
+A theme shows at once. Extensions need Spotify to restart: the *Restart
+Spotify* button closes it, applies them and opens it again in a few seconds
+(or it is done the next time you close Spotify).
+
+The page needs the background service (see below), which does the work:
+
+- The list is one file in this repository, [`gallery/index.json`](gallery/index.json).
+  It is downloaded when you open the gallery, kept for 10 minutes, and kept
+  on disk to show something when GitHub cannot be reached.
+- A mod is downloaded only when you click *Install*. Every file must have the
+  SHA-256 written in the list, then the mod is checked like any other mod
+  before it is installed. If anything differs, nothing is installed.
+- Files are read from `raw.githubusercontent.com`, not from GitHub's API,
+  which allows few requests without an account. If GitHub refuses or cannot
+  be reached, the same files come from the jsDelivr mirror
+  (`cdn.jsdelivr.net`); the hashes make a mirror as safe as GitHub.
+
+Set `SPACETIFY_GALLERY` to a folder (a copy of this repository) or to a base
+URL to try another list, for example before publishing a change to it.
+Accepting mods sent by other people is planned, see
+[docs/roadmap.md](docs/roadmap.md).
 
 Making your own: see [docs/themes.md](docs/themes.md) and
 [docs/extensions.md](docs/extensions.md). Spicetify themes and extensions do
@@ -145,15 +176,26 @@ How it works:
 - It runs `doctor` on the new version and turns off mods that no longer fit
   (`spacetify enable ID` turns one back on), and says so.
 - It only uses the file method. It never starts Spotify with `--live`'s
-  debugging port, never downloads anything and never needs admin rights.
+  debugging port and never needs admin rights. It downloads nothing but what
+  you install from the gallery (see above).
+- It keeps Spotify in step with your mods. When a theme, an extension or a
+  setting changed (in the app, the CLI or the gallery), or spacetify itself
+  was updated, it applies them again the next time Spotify is closed, or
+  right away with the gallery's *Restart Spotify*. It compares what Spotify
+  carries with what it should carry, at startup and whenever the mods or
+  `config.toml` change, and does nothing when they match.
 - After `spacetify restore`, it leaves Spotify alone until the next `apply`.
 - Notifications show as "spacetify" once the desktop app's installer has
   registered that name. Without it (built from source), they show under
   "Windows PowerShell", since a program needs a registered name to show
   its own.
 
-Only one service runs at a time. It talks to the CLI (and later the desktop
-app) through files in its folder, not through the network.
+Only one service runs at a time. It talks to the CLI and the desktop app
+through files in its folder. The gallery page inside Spotify cannot write
+files, so the service also listens on `127.0.0.1` (never on the network),
+on a port chosen once. It only answers requests that come from Spotify's
+interface and carry a secret that spacetify puts into Spotify with the mods.
+Both are kept in `service/gallery.json`, which only your user can read.
 
 To test it: apply your mods, run `spacetify service enable`, then
 `spacetify service simulate-update`. It puts Spotify's original interface
@@ -185,7 +227,7 @@ control it. Use it if you understand that trade-off.
 
 Mods go in the `themes` and `extensions` folders, and `config.toml` remembers
 which ones are on. The service keeps its status, events and log in
-`service` next to the backups.
+`service` next to the backups, and the last gallery list in `gallery`.
 
 Set `SPACETIFY_HOME` to keep everything in a single folder instead.
 
@@ -224,17 +266,20 @@ crates/
     src/mods/         themes and extensions: manifests, checks, install
     src/doctor.rs     compatibility checks against the installed Spotify
     src/service/      automatic repair: main loop, autostart, events, notifications
+    src/gallery/      the gallery: official list, checked downloads, local server
     src/setup.rs      what the Windows installer sets up (Path, notification name)
     src/config.rs     config.toml and app folders
     assets/runtime.js the code injected into Spotify that runs extensions
+    assets/gallery.js the gallery page drawn inside Spotify
   cli/       the `spacetify` binary: menu and commands
   service/   the `spacetify-service` binary, which runs in the background
 build/       Windows version information shared by both programs
 apps/
   desktop/   the desktop app (Tauri + Svelte), and the installer's window
   setup/     the Windows installer and uninstaller (Rust side)
-docs/        guides for theme and extension authors
+docs/        guides for theme and extension authors, and the roadmap
 examples/    an example theme and an example extension
+gallery/     the gallery's official list (index.json)
 ```
 
 ## Development
@@ -259,7 +304,13 @@ Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 1. ~~Core, CLI, backup/restore, proof of injection~~
 2. ~~Themes and extensions that rely on stable selectors and CSS variables~~
 3. ~~Background service that re-applies mods after a Spotify update~~
-4. Desktop app (Tauri) with an installer (in progress)
+4. ~~Desktop app (Tauri) with its own Windows installer~~
+5. A gallery inside Spotify: browse, install and turn on themes and
+   extensions without leaving Spotify (in progress)
+6. Anyone can submit a theme or an extension to the gallery; each request
+   is accepted or refused by the repository's owner (later)
+
+Phases 5 and 6 are detailed in [docs/roadmap.md](docs/roadmap.md).
 
 ## Releases and antivirus software
 
@@ -272,8 +323,12 @@ software. To keep that rare, spacetify:
 - is never packed or compressed (no UPX);
 - starts with Windows only through the standard per-user `Run` entry, visible
   in the Task Manager, and never copies itself anywhere;
-- never asks for admin rights, never downloads code, and never touches any
-  program other than Spotify;
+- never asks for admin rights, never downloads a program, and never touches
+  any program other than Spotify;
+- downloads only the themes and extensions you install from the gallery:
+  text files (CSS, JavaScript, TOML, images) that run inside Spotify like a
+  web page, from this repository's official list only, when you click
+  *Install*, each one checked against the SHA-256 written in the list;
 - installs for the current user only, with its own small installer
   (`apps/setup`) that writes nothing but what is listed under *Where files
   go*. Like most uninstallers, `uninstall.exe` runs a copy of itself from the

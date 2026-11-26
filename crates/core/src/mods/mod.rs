@@ -23,6 +23,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub use extension::Extension;
+pub use files::{MAX_FILES, MAX_TOTAL};
 pub use issue::{AssetProblem, ModIssue};
 pub use manifest::{Meta, Setting, SettingKind};
 pub use theme::Theme;
@@ -57,7 +58,7 @@ impl ModKind {
         }
     }
 
-    fn manifest(self) -> &'static str {
+    pub(crate) fn manifest(self) -> &'static str {
         match self {
             Self::Theme => theme::MANIFEST,
             Self::Extension => extension::MANIFEST,
@@ -148,6 +149,12 @@ impl ModStore {
 
     pub fn path_of(&self, kind: ModKind, id: &str) -> PathBuf {
         self.dir_of(kind).join(id)
+    }
+
+    /// Where mods from the gallery are downloaded and checked before they
+    /// are installed.
+    pub(crate) fn downloads_dir(&self) -> PathBuf {
+        self.root.join(".downloads")
     }
 
     /// Kind of the installed mod `id`, if any.

@@ -16,9 +16,14 @@
 //!   status.json    what it is doing now, rewritten when that changes
 //!   events.jsonl   what happened, one JSON object per line
 //!   service.log    technical log
-//!   inbox/         requests (`check`, `restart-spotify`, `stop`): one file
-//!                  each, deleted once read
+//!   inbox/         requests (`check`, `restart-spotify`, `apply-later`,
+//!                  `apply-now`, `stop`): one file each, deleted once read
+//!   gallery.json   port and secret of the gallery's local server
 //! ```
+//!
+//! The one exception to "files only" is the gallery page inside Spotify,
+//! which cannot write files: it talks to a small server of the service on
+//! 127.0.0.1 (see [`crate::gallery::server`]).
 
 pub mod alert;
 pub mod autostart;
@@ -128,6 +133,8 @@ pub enum Phase {
         process: String,
     },
     Repairing,
+    /// Writing changes made in the gallery into Spotify.
+    Applying,
     /// Nothing is done until the situation changes.
     Blocked {
         reason: Text,
@@ -161,6 +168,11 @@ impl Phase {
                 "Spotify a été mis à jour, attend que {process} soit fermé"
             ),
             Self::Repairing => crate::tr!(lang, "putting the mods back", "remet les mods"),
+            Self::Applying => crate::tr!(
+                lang,
+                "applying the changes made in the gallery",
+                "applique les changements de la galerie"
+            ),
             Self::Blocked { reason } => crate::tr!(
                 lang,
                 "on hold: {}",
@@ -186,6 +198,9 @@ pub struct ServiceStatus {
     /// even after a restart.
     #[serde(default)]
     pub seen: Vec<String>,
+    /// Changes made in the gallery wait for Spotify to close.
+    #[serde(default)]
+    pub apply_pending: bool,
 }
 
 /// "5 min ago", "il y a 2 h"… for a time written by the service.
@@ -256,6 +271,10 @@ pub enum Request {
     /// Close Spotify, put the mods back and open it again. Sent by the
     /// button of the "Spotify was updated" notification.
     RestartSpotify,
+    /// The gallery changed the mods: apply them once Spotify closes.
+    ApplyLater,
+    /// The gallery's "Restart Spotify": close it, apply, open it again.
+    ApplyNow,
     Stop,
 }
 
@@ -264,6 +283,8 @@ impl Request {
         match self {
             Self::Check => "check",
             Self::RestartSpotify => "restart-spotify",
+            Self::ApplyLater => "apply-later",
+            Self::ApplyNow => "apply-now",
             Self::Stop => "stop",
         }
     }
@@ -272,6 +293,8 @@ impl Request {
         match text.trim() {
             "check" => Some(Self::Check),
             "restart-spotify" => Some(Self::RestartSpotify),
+            "apply-later" => Some(Self::ApplyLater),
+            "apply-now" => Some(Self::ApplyNow),
             "stop" => Some(Self::Stop),
             _ => None,
         }
@@ -502,6 +525,7 @@ mod tests {
             spotify_version: Some("1.3.6.1921".into()),
             last_repair: None,
             seen: vec!["update:abc".into()],
+            apply_pending: true,
         };
         write_status(&paths, &status).unwrap();
         assert_eq!(read_status(&paths).unwrap(), Some(status));

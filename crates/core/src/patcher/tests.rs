@@ -272,3 +272,27 @@ fn backup_command_does_not_modify_spotify() {
     let outcome = backup(&fx.install, &fx.store).unwrap();
     assert!(matches!(outcome, BackupOutcome::OriginalOfPatched(ref r) if r.sha256 == before));
 }
+
+#[test]
+fn tells_whether_spotify_carries_the_payload() {
+    let fx = Fixture::new();
+    let spa = fx.install.xpui_spa();
+    let patched = build_patched(&spa, &Marker::new("abc"), &empty()).unwrap();
+    fs::write(&spa, patched).unwrap();
+    assert!(carries(&spa, &empty()).unwrap());
+
+    let link = crate::gallery::Link {
+        port: 4242,
+        token: "0123456789abcdef0123456789abcdef".into(),
+    };
+    assert!(!carries(&spa, &empty().with_gallery(Some(&link))).unwrap());
+
+    let dir = tempfile::tempdir().unwrap();
+    crate::testing::write_extension(&dir.path().join("one"), "one", &[]);
+    let one = crate::mods::extension::load(&dir.path().join("one")).unwrap();
+    let with_one = Payload::new(&crate::mods::ActiveMods {
+        theme: None,
+        extensions: vec![one],
+    });
+    assert!(!carries(&spa, &with_one).unwrap());
+}

@@ -6,6 +6,7 @@ use crate::backup::{BackupStore, OperationLock};
 use crate::config::Config;
 use crate::detect::{self, UiState};
 use crate::doctor::{self, Verdict};
+use crate::gallery::Link;
 use crate::mods::{ModKind, ModStore};
 use crate::patcher::{self, Payload};
 use crate::spotify::SpotifyInstall;
@@ -45,6 +46,7 @@ pub(crate) fn run(
     store: &BackupStore,
     mods: &ModStore,
     config_file: &Path,
+    gallery: Option<&Link>,
     idle: impl Fn() -> Result<()>,
 ) -> Result<Outcome> {
     let _lock = OperationLock::acquire(store.root())?;
@@ -83,7 +85,7 @@ pub(crate) fn run(
 
     let active = mods.active(&config)?;
     idle()?;
-    patcher::apply_unchecked(install, store, &Payload::new(&active))?;
+    patcher::apply_unchecked(install, store, &Payload::new(&active).with_gallery(gallery))?;
     Ok(Outcome::Repaired(Repaired {
         new_backup: created.then_some(backup.sha256),
         turned_off,
@@ -93,6 +95,41 @@ pub(crate) fn run(
             .map(|theme| theme.manifest.meta.name.clone()),
         extensions: active.extensions.len(),
     }))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Applied {
+    pub theme: Option<String>,
+    pub extensions: usize,
+}
+
+/// Applies the mods turned on in `config.toml` to an interface that is
+/// already patched, after changes made in the gallery.
+pub(crate) fn apply_changes(
+    install: &SpotifyInstall,
+    store: &BackupStore,
+    mods: &ModStore,
+    config_file: &Path,
+    gallery: Option<&Link>,
+    idle: impl Fn() -> Result<()>,
+) -> Result<Applied> {
+    let _lock = OperationLock::acquire(store.root())?;
+    install.ensure_modifiable()?;
+    match detect::inspect(install)?.state {
+        UiState::Patched(_) => {}
+        other => return Err(patcher::refusal(install, other)),
+    }
+    let config = Config::load(config_file)?;
+    let active = mods.active(&config)?;
+    idle()?;
+    patcher::apply_unchecked(install, store, &Payload::new(&active).with_gallery(gallery))?;
+    Ok(Applied {
+        theme: active
+            .theme
+            .as_ref()
+            .map(|theme| theme.manifest.meta.name.clone()),
+        extensions: active.extensions.len(),
+    })
 }
 
 /// For [`run`]: fails while `busy` names a running program.

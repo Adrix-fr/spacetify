@@ -7,6 +7,7 @@ use std::time::Duration;
 use spacetify_core::backup::BackupStore;
 use spacetify_core::config::Config;
 use spacetify_core::detect::{self, UiState};
+use spacetify_core::gallery::Link;
 use spacetify_core::mods::ModStore;
 use spacetify_core::patcher::{self, ApplyOutcome, BackupOutcome, Payload, RestoreOutcome, live};
 use spacetify_core::service::ServicePaths;
@@ -214,7 +215,11 @@ pub fn apply(ctx: &Context, yes: bool) -> Result<()> {
     println!();
     let closed = close_if_running(lang, yes)?;
 
-    let result = patcher::apply(&install, &ctx.store(), &Payload::new(&mods));
+    let result = patcher::apply(
+        &install,
+        &ctx.store(),
+        &Payload::new(&mods).with_gallery(Link::for_payload(&ctx.service).as_ref()),
+    );
     match &result {
         Ok(ApplyOutcome::Applied { new_backup, sha256 }) => {
             if *new_backup {
@@ -310,7 +315,8 @@ pub fn launch(ctx: &Context, live_mode: bool, yes: bool) -> Result<()> {
     println!();
     close_if_running(lang, yes)?;
     ui::hint(tr!(lang, "Starting Spotify…", "Lancement de Spotify…"));
-    live::run(&install, &Payload::new(&mods), || {
+    let payload = Payload::new(&mods).with_gallery(Link::for_payload(&ctx.service).as_ref());
+    live::run(&install, &payload, || {
         ui::success(tr!(
             lang,
             "Injected. Keep this window open while you use Spotify.",
