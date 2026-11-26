@@ -30,6 +30,10 @@ jobs:
     steps:
       - name: Answer the author
         run: |
+          # GitHub stops a script at the first failing command; this one
+          # checks each result itself (ClamAV, for one, "fails" when it finds
+          # a virus).
+          set +e
           set -uo pipefail
           issue="${BRANCH#submission/}"
           case "$issue" in ''|*[!0-9]*) exit 0 ;; esac

@@ -33,6 +33,10 @@ jobs:
 
       - name: Review the test mods
         run: |
+          # GitHub stops a script at the first failing command; this one
+          # checks each result itself (ClamAV, for one, "fails" when it finds
+          # a virus).
+          set +e
           set -uo pipefail
           cli="$PWD/target/debug/spacetify"
           root="$RUNNER_TEMP/mods"

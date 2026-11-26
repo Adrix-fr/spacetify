@@ -142,7 +142,7 @@ fn review_cmd(
                 }
                 url
             }
-            None => "#".into(),
+            None => String::new(),
         };
         let mut text = report.markdown(Lang::En, &link);
         text.push_str("\n<details><summary>Français</summary>\n\n");

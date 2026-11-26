@@ -321,7 +321,7 @@ impl Report {
             }
             out.push('\n');
             for finding in found {
-                out.push_str(&format!("  - {}", escape(finding.what.get(lang))));
+                out.push_str(&format!("  - {}", defang(&escape(finding.what.get(lang)))));
                 if let Some(file) = &finding.file {
                     let place = match finding.line {
                         Some(line) => match lang {
@@ -330,14 +330,16 @@ impl Report {
                         },
                         None => file.clone(),
                     };
-                    out.push_str(&format!(
-                        " ([{}]({}))",
-                        escape(&place),
-                        link(file, finding.line)
-                    ));
+                    // No link when the files cannot be read anywhere yet.
+                    let url = link(file, finding.line);
+                    if url.is_empty() {
+                        out.push_str(&format!(" ({})", escape(&place)));
+                    } else {
+                        out.push_str(&format!(" ([{}]({url}))", escape(&place)));
+                    }
                 }
                 if let Some(excerpt) = &finding.excerpt {
-                    out.push_str(&format!("<br><code>{}</code>", html(excerpt)));
+                    out.push_str(&format!("<br><code>{}</code>", defang(&html(excerpt))));
                 }
                 out.push('\n');
             }
@@ -353,6 +355,12 @@ impl Report {
         out.push_str(note);
         out
     }
+}
+
+/// Web addresses from a mod, made unclickable (`https[:]//…`): GitHub turns
+/// addresses into links, and a maintainer must not open one by mistake.
+fn defang(text: &str) -> String {
+    text.replace("://", "[:]//").replace("www.", "www[.]")
 }
 
 /// Text from the mod, safe in Markdown: no formatting, no mention, no HTML.

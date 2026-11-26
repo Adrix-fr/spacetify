@@ -322,3 +322,22 @@ fn the_comment_cannot_be_hijacked_by_the_mod() {
     );
     assert_eq!(escape("a_b @c"), "a&#95;b &#64;c");
 }
+
+#[test]
+fn without_a_link_the_place_is_plain_text() {
+    let dir = extension("fetch(1);\n");
+    let report = review(dir.path(), None);
+    let text = report.markdown(crate::Lang::En, &|_, _| String::new());
+    assert!(text.contains("(main.js, line 1)"), "{text}");
+    assert!(!text.contains("]("), "{text}");
+}
+
+#[test]
+fn addresses_in_the_comment_cannot_be_clicked() {
+    let dir = extension("fetch('https://thief.example/x');\nconst a = 'www.thief.example';\n");
+    let report = review(dir.path(), None);
+    let text = report.markdown(crate::Lang::En, &|_, _| String::new());
+    assert!(!text.contains("https://thief"), "{text}");
+    assert!(text.contains("https[:]//thief.example/x"), "{text}");
+    assert!(!text.contains("www.thief"), "{text}");
+}

@@ -59,6 +59,10 @@ jobs:
         env:
           BODY: ${{ github.event.issue.body }}
         run: |
+          # GitHub stops a script at the first failing command; this one
+          # checks each result itself (ClamAV, for one, "fails" when it finds
+          # a virus).
+          set +e
           set -uo pipefail
           cli="$PWD/target/debug/spacetify"
           work="$RUNNER_TEMP/work"
@@ -151,7 +155,7 @@ jobs:
             --markdown "$work/report.md" --link-base "$base" || exit 1
 
           # 5. Add the mod to the list, on a branch of its own.
-          git switch --create "$BRANCH"
+          git switch --create "$BRANCH" || exit 1
           "$cli" gallery add "$work/mod" --repo . --owner "$AUTHOR" \
             --form "$work/body.md" --json "$work/added.json" || exit 1
           jq -e '.ok' "$work/added.json" > /dev/null || refuse "$work/added.json"
@@ -167,9 +171,9 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gallery/index.json gallery/owners.json "gallery/mods/$id"
-          git commit --quiet --message "$title" --message "Requested in #$ISSUE by $AUTHOR."
-          git push --force --quiet origin "$BRANCH"
+          git add gallery/index.json gallery/owners.json "gallery/mods/$id" || exit 1
+          git commit --quiet --message "$title" --message "Requested in #$ISSUE by $AUTHOR." || exit 1
+          git push --force --quiet origin "$BRANCH" || exit 1
 
           # 6. The pull request the maintainers accept or refuse.
           {
@@ -185,10 +189,10 @@ jobs:
           } > "$work/pr.md"
           pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr" ]; then
-            gh pr edit "$pr" --repo "$REPO" --title "$title" --body-file "$work/pr.md"
+            gh pr edit "$pr" --repo "$REPO" --title "$title" --body-file "$work/pr.md" || exit 1
           else
             gh pr create --repo "$REPO" --base "${{ github.event.repository.default_branch }}" \
-              --head "$BRANCH" --title "$title" --body-file "$work/pr.md"
+              --head "$BRANCH" --title "$title" --body-file "$work/pr.md" || exit 1
             pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number')"
           fi
           gh pr edit "$pr" --repo "$REPO" --add-label gallery-submission || true
