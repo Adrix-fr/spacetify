@@ -92,11 +92,12 @@
   const STYLE = `
 #${BUTTON_ID}{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;
   margin:0 4px 0 8px;border:0;background:transparent;cursor:pointer;flex-shrink:0;opacity:.85;
+  position:relative;top:0;align-self:center;vertical-align:middle;line-height:0;
   -webkit-app-region:no-drag;transition:opacity .15s,transform .15s}
 #${BUTTON_ID}:hover{opacity:1;transform:scale(1.08)}
 #${BUTTON_ID}[aria-pressed="true"]{opacity:1}
-#${BUTTON_ID} svg{width:26px;height:26px}
-#${BUTTON_ID}.stg-floating{position:fixed;right:16px;bottom:104px;z-index:2147483000;width:44px;height:44px;
+#${BUTTON_ID} svg{display:block;width:26px;height:26px}
+#${BUTTON_ID}.stg-floating{position:fixed;top:auto !important;right:16px;bottom:104px;z-index:2147483000;width:44px;height:44px;
   border-radius:22px;background:#1f1f22;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 #${ROOT_ID}{position:fixed;z-index:2147482000;background:#0e0e0f;color:#ededed;border-radius:8px;overflow:hidden;
   display:flex;flex-direction:column;font-size:14px;line-height:20px;-webkit-font-smoothing:antialiased;
@@ -864,11 +865,25 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   // Right after the back and forward arrows when they are there, floating
   // otherwise. Spotify redraws its top bar now and then, so this runs again
   // on changes.
+  // Puts the logo's middle exactly on the arrows' middle, whatever the
+  // top bar's own alignment.
+  const align = () => {
+    const anchor = document.querySelector(FORWARD);
+    if (!anchor || !button.isConnected || button.classList.contains("stg-floating")) return;
+    const current = parseFloat(button.style.top) || 0;
+    const a = anchor.getBoundingClientRect();
+    const b = button.getBoundingClientRect();
+    if (!a.height || !b.height) return;
+    const shift = current + (a.top + a.height / 2) - (b.top + b.height / 2);
+    if (Math.abs(shift - current) >= 0.5) button.style.top = `${Math.round(shift * 2) / 2}px`;
+  };
+
   const placeButton = () => {
     const anchor = document.querySelector(FORWARD);
     if (anchor && anchor.parentElement) {
       if (anchor.nextSibling !== button) anchor.after(button);
       button.classList.remove("stg-floating");
+      requestAnimationFrame(safe(align));
     } else if (!button.isConnected && Date.now() - started > FLOAT_AFTER_MS) {
       button.classList.add("stg-floating");
       document.body.appendChild(button);
@@ -879,6 +894,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
   const watch = safe(() => {
     queued = false;
     if (!button.isConnected || button.classList.contains("stg-floating")) placeButton();
+    else align();
     if (state.open && location.pathname !== openedAt) close();
     else if (state.open) place();
   });
@@ -888,6 +904,7 @@ button.stg-name{text-decoration:underline;text-decoration-color:rgba(237,237,237
     setTimeout(watch, 250);
   }).observe(document.body, { childList: true, subtree: true });
   setTimeout(watch, FLOAT_AFTER_MS + 100);
+  window.addEventListener("resize", safe(align));
   placeButton();
   log("info", ["ready"]);
 })
