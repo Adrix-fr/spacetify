@@ -40,6 +40,8 @@ declare namespace Spacetify {
     readonly settings: Settings;
     /** What plays, and how to control it. */
     readonly player: Player;
+    /** The tracks of a playlist or of Liked Songs. */
+    readonly library: Library;
     /** Buttons, right-click menu entries, popups and pages. */
     readonly ui: Ui;
     /** Keyboard shortcuts. */
@@ -130,11 +132,27 @@ declare namespace Spacetify {
     /** From 0 to 1. */
     setVolume(volume: number): Promise<void>;
 
+    /**
+     * Plays these tracks in this order, like a playlist of its own (10 000 at
+     * most). Unlike the queue, which Spotify keeps to about 80 tracks, it
+     * holds them all.
+     */
+    playTracks(uris: string[]): Promise<void>;
+
     queue(): Promise<Queue>;
     addToQueue(uris: string | string[]): Promise<void>;
     /** Takes tracks added with addToQueue (or "Add to queue") out of the queue. */
     removeFromQueue(uris: string | string[]): Promise<void>;
     clearQueue(): Promise<void>;
+  }
+
+  interface Library {
+    /**
+     * Every track of a playlist ("spotify:playlist:…") or of Liked Songs
+     * ("spotify:collection:tracks"), in order. Tracks that cannot play here
+     * are left out. Rejects for other URIs.
+     */
+    tracks(uri: string): Promise<readonly Track[]>;
   }
 
   interface ButtonOptions {

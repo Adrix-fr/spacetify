@@ -198,6 +198,7 @@ await spacetify.player.addToQueue("spotify:track:6rqhFgbbKwnb9MLmUQDhG6");
 | `setShuffle(on)`                    | `true` or `false`                                            |
 | `setRepeat(mode)`                   | `"off"`, `"context"` (the album or playlist) or `"track"`    |
 | `playUri(uri)`                      | Plays a track, an album, a playlist…                         |
+| `playTracks(uris)`                  | Plays a list of tracks in this order, like a playlist (10 000 at most; the queue keeps only about 80) |
 | `getVolume()`, `setVolume(volume)`  | From 0 to 1                                                  |
 | `queue()`                           | `{ current, queued, next }`: what plays, what was added with *Add to queue*, what comes next |
 | `addToQueue(uris)`                  | One URI or a list                                            |
@@ -221,8 +222,23 @@ what is on screen: its buttons and bars, found by their `data-testid`.
 `state()` (track, artists, album, cover, position, duration, playing,
 shuffle, repeat), the change, track and volume events, `play`, `pause`,
 `togglePlay`, `next`, `previous`, `seek`, `setShuffle`, `setRepeat`,
-`getVolume` and `setVolume` keep working. Only `playUri` and the queue
-reject, with a clear error. `ready()` resolves either way.
+`getVolume` and `setVolume` keep working. Only `playUri`, `playTracks` and the
+queue reject, with a clear error. `ready()` resolves either way.
+
+### `spacetify.library`
+
+```js
+const tracks = await spacetify.library.tracks("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M");
+spacetify.log.info(tracks.length, "tracks");
+```
+
+`library.tracks(uri)` gives every track of a playlist (`spotify:playlist:…`)
+or of Liked Songs (`spotify:collection:tracks`), in order, read page by page
+from the services Spotify's own pages use (20 000 at most). Each track has
+the same fields as `player.state().track`. Tracks that cannot play here are
+left out. Other URIs (albums, artists) are refused: play them, then read
+`player.queue()`. Like the queue, it needs Spotify's player services
+(`player.available`).
 
 ### `spacetify.ui`
 
@@ -321,6 +337,7 @@ they do has an equivalent:
 | `Spicetify.Player.play`, `pause`, `next`, `seek`… | `spacetify.player.play`, `pause`, `next`, `seek`… |
 | `Spicetify.Player.data`, the `songchange` event   | `player.state()`, `player.onTrackChange`      |
 | `Spicetify.addToQueue`, `Platform.PlayerAPI`      | `player.addToQueue`, `player.queue()`         |
+| `Platform.PlaylistAPI.getContents`, `LibraryAPI.getTracks` | `library.tracks(uri)`                |
 | `Spicetify.Platform.History.push`, `listen`       | `spacetify.navigate`, `spacetify.onNavigate`  |
 | `Spicetify.Topbar.Button`, `Playbar.Button`       | `ui.topbarButton`, `ui.playbarButton`         |
 | `Spicetify.ContextMenu.Item`                      | `ui.contextMenuItem`                          |
