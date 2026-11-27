@@ -517,6 +517,7 @@
   // ---------------------------------------------------------------- player
 
   const REPEAT = ["off", "context", "track"];
+  const PLAY_TRACKS_MAX = 10000;
   const IMAGE_SIZES = ["xlarge", "large", "standard", "default", "small"];
   const BUTTONS = {
     playpause: '[data-testid="control-button-playpause"]',
@@ -916,6 +917,17 @@
         if (Array.isArray(uri)) throw new TypeError("playUri plays one URI");
         await needPlayer("playUri").play({ uri }, { featureIdentifier: "spacetify" });
       }),
+      // A list of tracks played in this order, like a playlist of its own.
+      // Unlike the queue, which Spotify keeps to about 80 tracks, it holds
+      // thousands.
+      playTracks: run(async (uris) => {
+        const list = checkUris(uris);
+        if (list.length > PLAY_TRACKS_MAX) throw new TypeError(`playTracks plays ${PLAY_TRACKS_MAX} tracks at most`);
+        await needPlayer("playTracks").play(
+          { uri: "spotify:internal:spacetify", pages: [{ items: list.map((uri) => ({ uri })) }] },
+          { featureIdentifier: "spacetify" },
+        );
+      }),
       getVolume: run(async () => {
         const api = playbackApi();
         if (api) return api.getVolume();
@@ -963,6 +975,52 @@
       }),
     });
   };
+
+  // ------------------------------------------------------------ library
+
+  // Every track of a playlist or of Liked Songs, read page by page from the
+  // services Spotify's own pages use. Tracks that cannot play here are left out.
+  const LIBRARY_PAGE = 500;
+  const LIBRARY_MAX = 20000;
+  const isLikedSongs = (uri) =>
+    /^spotify:(user:[^:]+:)?collection(:tracks)?$/.test(uri) || uri === service("LibraryLikedSongsUri");
+
+  const readPages = async (readPage) => {
+    const tracks = [];
+    for (let offset = 0; offset < LIBRARY_MAX; offset += LIBRARY_PAGE) {
+      const page = await readPage(offset);
+      const items = (page && page.items) || [];
+      for (const item of items) {
+        if (item && item.isPlayable !== false && !item.isBanned) {
+          const track = trackOf(item);
+          if (track) tracks.push(track);
+        }
+      }
+      const total = page && Number.isFinite(page.totalLength) ? page.totalLength : 0;
+      if (!items.length || offset + items.length >= total) break;
+    }
+    return Object.freeze(tracks);
+  };
+
+  const createLibrary = (state) =>
+    Object.freeze({
+      tracks: tagged(state, async (uri) => {
+        if (!isUri(uri) && !/^spotify:collection$/.test(String(uri))) {
+          throw new TypeError("library.tracks needs a Spotify URI");
+        }
+        if (isLikedSongs(uri)) {
+          const library = service("LibraryAPI");
+          if (!library) throw unavailable("Liked Songs");
+          return readPages((offset) => library.getTracks({ offset, limit: LIBRARY_PAGE }));
+        }
+        if (uri.startsWith("spotify:playlist:")) {
+          const playlists = service("PlaylistAPI");
+          if (!playlists) throw unavailable("the playlist");
+          return readPages((offset) => playlists.getContents(uri, { offset, limit: LIBRARY_PAGE }));
+        }
+        throw new TypeError("library.tracks reads playlists and Liked Songs");
+      }),
+    });
 
   // ------------------------------------------------------------ navigation
 
@@ -1570,6 +1628,8 @@
       settings: createSettings(state, meta.settings || {}, meta.configured || {}),
 
       player: createPlayer(state),
+
+      library: createLibrary(state),
 
       navigate(target) {
         navigate(target);
