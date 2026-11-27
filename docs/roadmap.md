@@ -21,7 +21,7 @@ without leaving Spotify or opening the spacetify app.
 - **What it shows.** Themes and extensions with a preview, their author,
   version and description, and what is already installed or on.
 - **Where the mods come from.** An official list kept in this repository,
-  [`gallery/index.json`](../gallery/index.json). Nothing is downloaded until
+  [`gallery/index.json`](https://github.com/spacetify-mod/gallery/blob/main/gallery/index.json). Nothing is downloaded until
   you open the gallery, and a mod is downloaded only when you click
   *Install*. Every file is checked against the SHA-256 written in the list,
   then validated like any other mod before it is installed.

@@ -10,10 +10,10 @@ export interface Op {
   restore?: boolean;
 }
 
-export const RELEASES = "https://github.com/Adrix-fr/spacetify/releases";
-export const LICENSE = "https://github.com/Adrix-fr/spacetify/blob/main/LICENSE";
+export const RELEASES = "https://github.com/spacetify-mod/spacetify/releases";
+export const LICENSE = "https://github.com/spacetify-mod/spacetify/blob/main/LICENSE";
 export const ANTIVIRUS =
-  "https://github.com/Adrix-fr/spacetify#releases-and-antivirus-software";
+  "https://github.com/spacetify-mod/spacetify#releases-and-antivirus-software";
 
 export function stepLabel(step: Step): string {
   switch (step) {

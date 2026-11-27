@@ -42,13 +42,66 @@ fn zip_of(entries: &[(&str, &[u8])]) -> tempfile::NamedTempFile {
     file
 }
 
-/// A repository with the gallery's list and the example theme.
+/// A repository with the gallery's list: a copy of the real one when
+/// `SPACETIFY_GALLERY_DIR` gives it, otherwise a list with the example
+/// theme only, owned by the team.
 fn repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     fs::create_dir_all(dir.path().join("gallery")).unwrap();
-    fs::copy(root.join(INDEX_PATH), dir.path().join(INDEX_PATH)).unwrap();
-    fs::copy(root.join(OWNERS_PATH), dir.path().join(OWNERS_PATH)).unwrap();
+    if let Some(root) = super::super::tests::gallery_root() {
+        fs::copy(root.join(INDEX_PATH), dir.path().join(INDEX_PATH)).unwrap();
+        fs::copy(root.join(OWNERS_PATH), dir.path().join(OWNERS_PATH)).unwrap();
+        return dir;
+    }
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/themes/midnight");
+    let dst = dir.path().join("gallery/mods/midnight");
+    fs::create_dir_all(&dst).unwrap();
+    let mut files = Vec::new();
+    for entry in fs::read_dir(&src).unwrap().flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let bytes = fs::read(entry.path()).unwrap();
+        fs::write(dst.join(&name), &bytes).unwrap();
+        files.push(FileEntry {
+            path: name,
+            sha256: sha256_hex(&bytes),
+        });
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    let loaded = mods::load_dir(&dst).unwrap();
+    let Loaded::Theme(theme) = &loaded else {
+        panic!("the example is a theme");
+    };
+    let meta = loaded.meta();
+    let catalog = Catalog {
+        format: 1,
+        mods: vec![Entry {
+            id: meta.id.clone(),
+            kind: loaded.kind(),
+            name: meta.name.clone(),
+            author: meta.author.clone(),
+            version: meta.version.to_string(),
+            description: meta.description.clone().unwrap_or_default(),
+            description_fr: None,
+            path: "gallery/mods/midnight".into(),
+            files,
+            preview: Some(Preview::of_colors(&theme.colors)),
+            showcase: None,
+            updated: None,
+        }],
+    };
+    fs::write(
+        dir.path().join(INDEX_PATH),
+        serde_json::to_vec_pretty(&catalog).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join(OWNERS_PATH),
+        format!(
+            "{{\"midnight\": \"{TEAM_OWNER}\"}}
+"
+        ),
+    )
+    .unwrap();
     dir
 }
 
@@ -171,11 +224,9 @@ fn the_form_link_is_filled_in() {
     let dir = aurora("1.0.0");
     let loaded = mods::load_dir(dir.path()).unwrap();
     let url = form_url(&loaded, false);
-    assert!(
-        url.starts_with(
-            "https://github.com/Adrix-fr/spacetify/issues/new?template=submit-mod.yml&"
-        )
-    );
+    assert!(url.starts_with(
+        "https://github.com/spacetify-mod/gallery/issues/new?template=submit-mod.yml&"
+    ));
     assert!(url.contains("&name=Aurora&kind=Theme&version=1.0.0&request=New%20mod"));
     assert!(url.contains("title=%5BMod%5D%20Aurora%201.0.0"));
 }

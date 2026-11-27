@@ -32,7 +32,7 @@
     "publisher": "spacetify team",
     "copyright": "GPL-3.0-or-later",
     "license": "GPL-3.0-or-later",
-    "homepage": "https://github.com/Adrix-fr/spacetify",
+    "homepage": "https://github.com/spacetify-mod/spacetify",
     "category": "Utility",
     "shortDescription": "A reliable mod manager for the Spotify desktop client.",
     "longDescription": "spacetify applies themes and extensions to the Spotify desktop client and puts them back after Spotify updates.",

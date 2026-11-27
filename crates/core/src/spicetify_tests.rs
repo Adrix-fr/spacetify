@@ -90,6 +90,16 @@ fn repository() -> Source {
     Source::Folder(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
 }
 
+/// A copy of the gallery's repository (spacetify-mod/gallery), given by
+/// `SPACETIFY_GALLERY_DIR`: its CI sets it. Without it, the test that
+/// installs the gallery's equivalents is skipped.
+fn gallery_repository() -> Option<Source> {
+    let dir = std::path::PathBuf::from(std::env::var_os("SPACETIFY_GALLERY_DIR")?);
+    dir.join(crate::gallery::INDEX_PATH)
+        .is_file()
+        .then_some(Source::Folder(dir))
+}
+
 #[test]
 fn reads_spicetify_config() {
     let spice = Spice::new();
@@ -214,6 +224,10 @@ fn spotify_is_only_restored_from_a_backup_of_the_same_version() {
 
 #[test]
 fn leaving_restores_spotify_imports_themes_and_installs_equivalents() {
+    let Some(gallery) = gallery_repository() else {
+        eprintln!("SPACETIFY_GALLERY_DIR is not set: this test runs in the gallery's CI");
+        return;
+    };
     let fx = Fixture::new();
     let spice = Spice::new();
     modified_by_spicetify(&fx, &spice);
@@ -223,7 +237,7 @@ fn leaving_restores_spotify_imports_themes_and_installs_equivalents() {
     let plan = plan(&fx.install, Some(&found)).unwrap();
     assert!(!already_left(&dirs));
 
-    let outcome = leave_with(&fx.install, &plan, &dirs, &repository()).unwrap();
+    let outcome = leave_with(&fx.install, &plan, &dirs, &gallery).unwrap();
     assert!(outcome.restored);
     assert_eq!(outcome.removed, [fx.install.xpui_dir()]);
     assert_eq!(

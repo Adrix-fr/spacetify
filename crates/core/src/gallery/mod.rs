@@ -42,11 +42,11 @@ use crate::{Error, Result};
 pub const INDEX_PATH: &str = "gallery/index.json";
 /// Where the repository's files are read from, in order of preference.
 pub const OFFICIAL_BASES: [&str; 2] = [
-    "https://raw.githubusercontent.com/Adrix-fr/spacetify/main/",
-    "https://cdn.jsdelivr.net/gh/Adrix-fr/spacetify@main/",
+    "https://raw.githubusercontent.com/spacetify-mod/gallery/main/",
+    "https://cdn.jsdelivr.net/gh/spacetify-mod/gallery@main/",
 ];
 /// Where a mod's files can be read by people.
-pub const CODE_BASE: &str = "https://github.com/Adrix-fr/spacetify/tree/main/";
+pub const CODE_BASE: &str = "https://github.com/spacetify-mod/gallery/tree/main/";
 /// Set to a folder (or a base URL ending in `/`) to use another copy of the
 /// repository, for example to try a new list before publishing it.
 pub const SOURCE_ENV: &str = "SPACETIFY_GALLERY";

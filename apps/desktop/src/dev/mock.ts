@@ -133,7 +133,7 @@ export function installMock() {
         };
       }
       case "submit_prepare":
-        return { zip: "C:\\Users\\moi\\Downloads\\aurora-1.0.0.zip", formUrl: "https://github.com/Adrix-fr/spacetify/issues/new" };
+        return { zip: "C:\\Users\\moi\\Downloads\\aurora-1.0.0.zip", formUrl: "https://github.com/spacetify-mod/gallery/issues/new" };
       case "take_start_page":
         return null;
       case "spicetify_plan":

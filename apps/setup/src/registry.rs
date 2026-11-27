@@ -10,7 +10,7 @@ const UNINSTALL: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\sp
 /// Left by the first installer (made by Tauri's NSIS bundler).
 const OLD_INSTALLER: &str = r"Software\Adrix-fr (spacetify project)";
 const PUBLISHER: &str = "spacetify team";
-const HOMEPAGE: &str = "https://github.com/Adrix-fr/spacetify";
+const HOMEPAGE: &str = "https://github.com/spacetify-mod/spacetify";
 
 /// An installed copy, as Windows knows it.
 #[derive(Debug, Clone)]
