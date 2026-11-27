@@ -24,7 +24,7 @@ use crate::service::Text;
 use crate::{Error, Result};
 
 /// The repository that holds the gallery.
-pub const REPOSITORY: &str = "Adrix-fr/spacetify";
+pub const REPOSITORY: &str = "spacetify-mod/gallery";
 /// The request form, in `.github/ISSUE_TEMPLATE/`.
 pub const FORM: &str = "submit-mod.yml";
 /// Who owns each mod of the gallery: only they can send its updates.
@@ -332,7 +332,7 @@ fn one_line(text: &str, max: usize) -> String {
 fn attachment_url(text: &str) -> Option<String> {
     const PREFIXES: [&str; 2] = [
         "https://github.com/user-attachments/files/",
-        "https://github.com/Adrix-fr/spacetify/files/",
+        "https://github.com/spacetify-mod/gallery/files/",
     ];
     for prefix in PREFIXES {
         let mut from = 0;

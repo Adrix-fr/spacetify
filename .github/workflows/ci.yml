@@ -56,11 +56,11 @@ jobs:
       - name: Build
         run: cargo build --workspace --release --locked
 
-  # Every mod of the gallery goes through the antivirus and the robot at
-  # each change, the team's own included: that is what the gallery's
-  # "Verified" badge says.
-  gallery-safety:
-    name: gallery safety
+  # The example theme and extension go through the antivirus and the robot
+  # at each change. The gallery's own mods are checked the same way in its
+  # repository, spacetify-mod/gallery.
+  examples-safety:
+    name: examples safety
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -75,11 +75,11 @@ jobs:
           sudo apt-get install -y clamav
           sudo systemctl stop clamav-freshclam || true
           sudo freshclam
-          clamscan --recursive --infected gallery/mods examples
-      - name: Robot review of every mod
+          clamscan --recursive --infected examples
+      - name: Robot review of the examples
         run: |
           failed=0
-          for dir in gallery/mods/*/ examples/themes/*/ examples/extensions/*/; do
+          for dir in examples/themes/*/ examples/extensions/*/; do
             target/debug/spacetify gallery review "$dir" --lang en --json review.json > /dev/null
             blocking="$(jq -r '.blocking' review.json)"
             echo "$dir: $blocking blocking"

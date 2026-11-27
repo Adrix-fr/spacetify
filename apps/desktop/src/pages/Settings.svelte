@@ -6,7 +6,7 @@
   import Logo from "../lib/Logo.svelte";
   import { app, refreshOverview, showError, tr } from "../lib/state.svelte";
 
-  const REPO = "https://github.com/Adrix-fr/spacetify";
+  const REPO = "https://github.com/spacetify-mod/spacetify";
   let settings = $state<SettingsView | null>(null);
 
   async function load() {

@@ -7,6 +7,14 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// A copy of the gallery's own repository (spacetify-mod/gallery), given by
+/// `SPACETIFY_GALLERY_DIR`. Its CI sets it; elsewhere the tests that need it
+/// are skipped.
+pub(super) fn gallery_root() -> Option<PathBuf> {
+    let dir = PathBuf::from(std::env::var_os("SPACETIFY_GALLERY_DIR")?);
+    dir.join(INDEX_PATH).is_file().then_some(dir)
+}
+
 /// Every file of a mod folder, relative to it, sorted.
 fn files_of(dir: &Path) -> Vec<FileEntry> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<FileEntry>) {
@@ -78,7 +86,12 @@ fn fake_repo(folders: &[&str]) -> (tempfile::TempDir, Catalog) {
 
 #[test]
 fn the_official_list_matches_the_files_in_the_repository() {
-    let root = repo_root();
+    let Some(root) = gallery_root() else {
+        eprintln!(
+            "SPACETIFY_GALLERY_DIR is not set: the gallery's list is checked in its own repository"
+        );
+        return;
+    };
     let catalog = Catalog::parse(&fs::read(root.join(INDEX_PATH)).unwrap()).unwrap();
     assert!(!catalog.mods.is_empty());
     for entry in &catalog.mods {

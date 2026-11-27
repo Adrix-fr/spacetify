@@ -106,7 +106,7 @@ still runs as your user, without admin rights. To uninstall, first run
 Build with Rust 1.95 or newer (get it with [rustup](https://rustup.rs)):
 
 ```sh
-git clone https://github.com/Adrix-fr/spacetify
+git clone https://github.com/spacetify-mod/spacetify
 cd spacetify
 cargo install --path crates/cli
 cargo install --path crates/service   # for automatic repair
@@ -180,7 +180,8 @@ Spotify* button closes it, applies them and opens it again in a few seconds
 
 The page needs the background service (see below), which does the work:
 
-- The list is one file in this repository, [`gallery/index.json`](gallery/index.json).
+- The list is one file in the gallery's own repository, [`spacetify-mod/gallery`](https://github.com/spacetify-mod/gallery):
+  [`gallery/index.json`](https://github.com/spacetify-mod/gallery/blob/main/gallery/index.json).
   It is downloaded when you open the gallery, kept for 10 minutes, and kept
   on disk to show something when GitHub cannot be reached.
 - A mod is downloaded only when you click *Install*. Every file must have the
@@ -396,10 +397,12 @@ apps/
   setup/     the Windows installer and uninstaller (Rust side)
 docs/        guides for theme and extension authors, and the roadmap
 examples/    an example theme and an example extension
-gallery/     the gallery's official list (index.json), who owns each mod
-             (owners.json) and the accepted mods (mods/)
-.github/     CI, the request form and the gallery's robot (workflows/gallery-*.yml)
+.github/     CI
 ```
+
+The gallery itself (its list, the accepted mods, the request form and the
+robot that checks every request) lives in its own repository,
+[spacetify-mod/gallery](https://github.com/spacetify-mod/gallery).
 
 ## Development
 

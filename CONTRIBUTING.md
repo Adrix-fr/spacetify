@@ -8,7 +8,7 @@ are all welcome.
 You need Rust 1.95 or newer, and Node.js 20 or newer for the desktop app.
 
 ```sh
-git clone https://github.com/Adrix-fr/spacetify
+git clone https://github.com/spacetify-mod/spacetify
 cd spacetify
 cd apps/desktop && npm ci && npm run build && cd ../..
 cargo run -p spacetify-cli
@@ -48,23 +48,28 @@ cd apps/desktop && npm run check
   that runs at install. The
   service only uses the file method, never `--live`.
 - **Downloads are the gallery's only.** The only thing spacetify downloads is
-  a mod the user installs from the gallery: listed in `gallery/index.json`,
+  a mod the user installs from the gallery: listed in `gallery/index.json` of
+  [spacetify-mod/gallery](https://github.com/spacetify-mod/gallery),
   fetched when they click *Install*, every file checked against its SHA-256,
   then validated like any mod. Nothing else goes to the internet. The
   gallery's local server (`crates/core/src/gallery/server.rs`) listens on
   `127.0.0.1` only and answers Spotify's interface only, with its secret.
 - **Submissions are reviewed, never run.** Mods sent to the gallery are
-  untrusted: the robot (`.github/workflows/gallery-submission.yml`) only
+  untrusted: the robot (`.github/workflows/gallery-submission.yml` in the
+  gallery's repository) only
   reads them, through `spacetify gallery form | unpack | review | add`, whose
   logic is in `crates/core/src/gallery/submission.rs` and `review.rs`. The
   request's text reaches the workflow through environment variables and
   files, never inside a command line or `${{ }}` in a script.
-- **The gallery list matches the files.** `gallery/index.json` gives the
+- **The gallery list matches the files.** `gallery/index.json`, in the
+  gallery's repository, gives the
   SHA-256 of every file of every mod it lists, its `showcase/` folder
   included (pictures and texts for the gallery page, never installed: see
   `crates/core/src/gallery/showcase.rs`). When you change one of those
-  files (the examples are in it), update its hash: a test
-  (`the_official_list_matches_the_files_in_the_repository`) fails until you do.
+  files, update its hash: a test
+  (`the_official_list_matches_the_files_in_the_repository`) fails until you
+  do. It runs in the gallery's CI, which points `SPACETIFY_GALLERY_DIR` at its
+  copy; set it to run it here too.
 - **Tests never touch a real Spotify install.** Use the fixtures in
   `crates/core/src/testing.rs`, which build fake `xpui.spa` archives in a
   temporary folder. The service's logic is tested with a fake clock and a
@@ -100,6 +105,7 @@ cd apps/desktop && npm run check
 
 ## Accepting or refusing a mod (maintainers)
 
+This happens in the gallery's repository, [spacetify-mod/gallery](https://github.com/spacetify-mod/gallery).
 Each request made with the *Submit a mod* form gets a security report from
 the robot. If nothing is blocking, the robot opens a pull request that adds
 the mod to `gallery/index.json` (files in `gallery/mods/<id>/`, owner in

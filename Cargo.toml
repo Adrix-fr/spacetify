@@ -7,7 +7,7 @@ version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/Adrix-fr/spacetify"
+repository = "https://github.com/spacetify-mod/spacetify"
 description = "A reliable mod manager for the Spotify desktop client."
 
 [workspace.dependencies]

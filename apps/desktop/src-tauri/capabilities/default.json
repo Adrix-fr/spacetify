@@ -14,8 +14,10 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [
-        { "url": "https://github.com/Adrix-fr/spacetify" },
-        { "url": "https://github.com/Adrix-fr/spacetify/*" },
+        { "url": "https://github.com/spacetify-mod/spacetify" },
+        { "url": "https://github.com/spacetify-mod/spacetify/*" },
+        { "url": "https://github.com/spacetify-mod/gallery" },
+        { "url": "https://github.com/spacetify-mod/gallery/*" },
         { "url": "https://github.com/signup" }
       ]
     },

@@ -35,7 +35,7 @@ BEGIN
       VALUE "OriginalFilename", "{file_name}.exe"
       VALUE "ProductName", "spacetify"
       VALUE "ProductVersion", "{version}"
-      VALUE "Comments", "Open source: https://github.com/Adrix-fr/spacetify"
+      VALUE "Comments", "Open source: https://github.com/spacetify-mod/spacetify"
     END
   END
   BLOCK "VarFileInfo"
